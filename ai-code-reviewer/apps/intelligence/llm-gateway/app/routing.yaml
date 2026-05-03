@@ -1,0 +1,30 @@
+# Multi-model routing configuration
+# Hot-reloadable: update this file and call GET /models to verify — no restart needed.
+#
+# Format: provider/model uses LiteLLM naming convention.
+# See https://docs.litellm.ai/docs/providers for supported providers.
+
+task_types:
+  simple:
+    primary:
+      provider: groq
+      model: llama-3.1-8b-instant
+    fallback:
+      provider: openai
+      model: gpt-4o-mini
+
+  deep_reasoning:
+    primary:
+      provider: groq
+      model: llama-3.1-70b-versatile
+    fallback:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+
+  production:
+    primary:
+      provider: anthropic
+      model: claude-sonnet-4-20250514
+    fallback:
+      provider: openai
+      model: gpt-4o
