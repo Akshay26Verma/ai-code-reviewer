@@ -1,0 +1,15 @@
+packages/types/
+├── src/
+│   ├── lib/
+│   │   └── types.ts
+│   ├── analysis.ts
+│   ├── events.ts
+│   ├── index.ts
+│   ├── insights.ts
+│   └── review.ts
+├── eslint.config.mjs
+├── package.json
+├── project.json
+├── README.md
+├── tsconfig.json
+└── tsconfig.lib.json
