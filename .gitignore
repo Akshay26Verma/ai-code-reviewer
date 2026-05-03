@@ -2,3 +2,7 @@ node_modules/
 dist/
 .nx/
 .env
+
+ai-code-reviewer/.vscode/
+ai-code-reviewer/.prettierrc
+ai-code-reviewer/.prettierignore
