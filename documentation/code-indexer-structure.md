@@ -1,0 +1,28 @@
+apps/intelligence/code-indexer/
+├── src/
+│   ├── app/
+│   │   ├── clients/
+│   │   │   ├── clients.module.ts
+│   │   │   ├── knowledge-graph.client.ts
+│   │   │   └── llm-gateway.client.ts
+│   │   ├── indexer/
+│   │   │   ├── indexer.controller.ts
+│   │   │   ├── indexer.module.ts
+│   │   │   └── indexer.service.ts
+│   │   ├── kafka/
+│   │   │   ├── kafka.controller.ts
+│   │   │   └── kafka.module.ts
+│   │   ├── parser/
+│   │   │   ├── parser.module.ts
+│   │   │   └── parser.service.ts
+│   │   ├── storage/
+│   │   │   ├── pinecone.service.ts
+│   │   │   ├── s3.service.ts
+│   │   │   └── storage.module.ts
+│   │   └── app.module.ts
+│   └── main.ts
+├── .env.example
+├── project.json
+├── tsconfig.app.json
+├── tsconfig.json
+└── webpack.config.js
