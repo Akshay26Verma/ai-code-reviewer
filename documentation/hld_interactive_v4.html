@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Code Reviewer — HLD v4</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --main-bg:#0B1120;--main-tx:#94A3B8;--main-tx-bright:#F8FAFC;
+  --c-bg:#4A1B0C;--c-bd:#712B13;--c-tx:#F5C4B3;--c-chip:#993C1D;--c-chip-tx:#FAECE7;
+  --p-bg:#26215C;--p-bd:#3C3489;--p-tx:#CECBF6;--p-chip:#534AB7;--p-chip-tx:#EEEDFE;
+  --t-bg:#04342C;--t-bd:#085041;--t-tx:#9FE1CB;--t-chip:#0F6E56;--t-chip-tx:#E1F5EE;
+  --b-bg:#042C53;--b-bd:#0C447C;--b-tx:#B5D4F4;--b-chip:#185FA5;--b-chip-tx:#E6F1FB;
+  --a-bg:#412402;--a-bd:#633806;--a-tx:#FAC775;--a-chip:#854F0B;--a-chip-tx:#FAEEDA;
+  --g-bg:#173404;--g-bd:#27500A;--g-tx:#C0DD97;--g-chip:#3B6D11;--g-chip-tx:#EAF3DE;
+  --gr-bg:#1E293B;--gr-bd:#334155;--gr-tx:#94A3B8;
+  --s-bg:#2E1065;--s-bd:#4C1D95;--s-tx:#DDD6FE;--s-chip:#5B21B6;--s-chip-tx:#F5F3FF;
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  --font-mono:'SF Mono','Fira Code','Cascadia Code',monospace;
+}
+@media(prefers-color-scheme:light){:root{
+  --main-bg:#F8FAFC;--main-tx:#475569;--main-tx-bright:#0F172A;
+  --c-bg:#FAECE7;--c-bd:#F5C4B3;--c-tx:#712B13;--c-chip:#F0997B;--c-chip-tx:#4A1B0C;
+  --p-bg:#EEEDFE;--p-bd:#CECBF6;--p-tx:#3C3489;--p-chip:#AFA9EC;--p-chip-tx:#26215C;
+  --t-bg:#E1F5EE;--t-bd:#9FE1CB;--t-tx:#085041;--t-chip:#5DCAA5;--t-chip-tx:#04342C;
+  --b-bg:#E6F1FB;--b-bd:#B5D4F4;--b-tx:#0C447C;--b-chip:#85B7EB;--b-chip-tx:#042C53;
+  --a-bg:#FAEEDA;--a-bd:#FAC775;--a-tx:#633806;--a-chip:#EF9F27;--a-chip-tx:#412402;
+  --g-bg:#EAF3DE;--g-bd:#C0DD97;--g-tx:#27500A;--g-chip:#97C459;--g-chip-tx:#173404;
+  --gr-bg:#F1EFE8;--gr-bd:#D3D1C7;--gr-tx:#5F5E5A;
+  --s-bg:#F5F3FF;--s-bd:#DDD6FE;--s-tx:#4C1D95;--s-chip:#C4B5FD;--s-chip-tx:#2E1065;
+}}
+
+body{font-family:var(--font-sans);padding:1rem;background:var(--main-bg);color:var(--main-tx);transition:background .3s, color .3s;}
+
+.arch{display:flex;flex-direction:column;gap:5px;}
+.dom{border-radius:10px;padding:10px 12px;border:0.5px solid;}
+.dom-title{font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.lang-badge{font-size:9px;padding:1px 6px;border-radius:3px;font-weight:600;letter-spacing:.04em;font-family:var(--font-mono);}
+.lang-ts{background:#3178C6;color:#fff;}
+.svc-row{display:flex;gap:7px;flex-wrap:wrap;}
+.svc{cursor:pointer;padding:7px 12px;border-radius:7px;border:1px solid;font-size:12px;font-weight:500;transition:opacity .15s;user-select:none;line-height:1.2;outline:none;position:relative;}
+.svc:hover{opacity:.75;}
+.svc.active{outline:2px solid currentColor;outline-offset:2px;}
+.svc .sub{font-size:10px;font-weight:400;display:block;margin-top:2px;opacity:.75;}
+.kafka-bar{padding:7px 14px;border-radius:8px;font-size:11px;font-weight:500;text-align:center;letter-spacing:.02em;border:0.5px solid var(--gr-bd);background:var(--gr-bg);color:var(--gr-tx);}
+.ext-bar{padding:6px 14px;border-radius:7px;font-size:11px;text-align:center;border:0.5px dashed var(--gr-bd);color:var(--gr-tx);}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.detail{margin-top:10px;padding:16px;border-radius:10px;border:1px solid var(--gr-bd);background:var(--gr-bg);box-shadow:0 4px 20px rgba(0,0,0,0.2);}
+.det-head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
+.det-name{font-size:15px;font-weight:600;color:var(--main-tx-bright);}
+.det-badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:500;}
+.det-lang-badge{font-size:10px;padding:2px 8px;border-radius:4px;font-weight:600;font-family:var(--font-mono);}
+.det-desc{font-size:13px;color:var(--gr-tx);line-height:1.65;margin-bottom:12px;opacity:.85;}
+.sec{margin-bottom:11px;}
+.sec-label{font-size:10px;font-weight:500;color:var(--gr-tx);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px;opacity:.6;}
+.chip{display:inline-block;font-size:11px;padding:2px 8px;border-radius:4px;margin:2px 2px 2px 0;font-weight:500;}
+.ch-prod{background:var(--g-bg);color:var(--g-tx);border:0.5px solid var(--g-bd);}
+.ch-cons{background:var(--b-bg);color:var(--b-tx);border:0.5px solid var(--b-bd);}
+.ch-tech{background:var(--gr-bg);color:var(--gr-tx);border:0.5px solid var(--gr-bd);}
+.ch-api{background:var(--p-bg);color:var(--p-tx);border:0.5px solid var(--p-bd);font-family:var(--font-mono);font-size:10px;}
+.mig{background:var(--a-bg);border:0.5px solid var(--a-bd);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--a-tx);line-height:1.65;}
+.mig-label{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}
+.kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:11px;}
+.placeholder{color:var(--gr-tx);font-size:13px;text-align:center;padding:14px 0;opacity:.5;}
+.none-label{font-size:12px;color:var(--gr-tx);opacity:.4;}
+.legend{display:flex;gap:12px;justify-content:flex-end;margin-bottom:6px;flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--gr-tx);opacity:.7;}
+.info-note{padding:6px 14px;border-radius:7px;font-size:11px;text-align:center;border:0.5px dashed var(--b-bd);background:var(--b-bg);color:var(--b-tx);}
+</style>
+</head>
+<body>
+<div class="arch">
+
+  <div class="legend">
+    <div class="legend-item"><span class="lang-badge lang-ts">TS</span> Pure TypeScript Monorepo · NestJS / Next.js</div>
+  </div>
+
+  <div class="ext-bar">External: GitHub / GitLab / Bitbucket webhooks &nbsp;·&nbsp; <strong>Bifrost Gateway</strong> &nbsp;·&nbsp; CI/CD runners &nbsp;·&nbsp; Developer dashboard</div>
+
+  <!-- INGESTION -->
+  <div class="dom" style="background:var(--c-bg);border-color:var(--c-bd)">
+    <div class="dom-title" style="color:var(--c-tx)">Ingestion domain <span class="lang-badge lang-ts">TS</span></div>
+    <div class="svc-row">
+      <div class="svc" id="svc-webhook" onclick="show('webhook')" style="background:var(--c-chip);border-color:var(--c-tx);color:var(--c-chip-tx)">
+        Webhook Service<span class="sub">NestJS · HMAC-SHA256 · KafkaJS</span>
+      </div>
+      <div class="svc" id="svc-api-gateway" onclick="show('api-gateway')" style="background:var(--c-chip);border-color:var(--c-tx);color:var(--c-chip-tx)">
+        API Gateway<span class="sub">NestJS · Passport JWT · Redis rate limit</span>
+      </div>
+      <div class="svc" id="svc-dashboard" onclick="show('dashboard')" style="background:var(--c-chip);border-color:var(--c-tx);color:var(--c-chip-tx)">
+        Dashboard<span class="sub">Next.js 14 · App Router · Tailwind</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="kafka-bar">⚡ Kafka Message Bus (KafkaJS) &nbsp;—&nbsp; <strong>Topics:</strong> pr.events.raw &nbsp;·&nbsp; pr.events.manual &nbsp;·&nbsp; pr.events.merged &nbsp;·&nbsp; analysis.tasks.* &nbsp;·&nbsp; analysis.results.*</div>
+
+  <!-- ORCHESTRATION -->
+  <div class="dom" style="background:var(--p-bg);border-color:var(--p-bd)">
+    <div class="dom-title" style="color:var(--p-tx)">Orchestration domain <span class="lang-badge lang-ts">TS</span></div>
+    <div class="svc-row">
+      <div class="svc" id="svc-temporal" onclick="show('temporal')" style="background:var(--p-chip);border-color:var(--p-tx);color:var(--p-chip-tx)">
+        Temporal Worker<span class="sub">@temporalio/worker · NestJS · Durable workflows</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALYSIS + INTELLIGENCE -->
+  <div class="split">
+    <div class="dom" style="background:var(--t-bg);border-color:var(--t-bd)">
+      <div class="dom-title" style="color:var(--t-tx)">Analysis domain <span class="lang-badge lang-ts">TS</span></div>
+      <div class="svc-row" style="flex-direction:column">
+        <div class="svc" id="svc-static-analysis" onclick="show('static-analysis')" style="background:var(--t-chip);border-color:var(--t-tx);color:var(--t-chip-tx)">
+          Static Analysis<span class="sub">NestJS · web-tree-sitter · Semgrep</span>
+        </div>
+        <div class="svc" id="svc-semantic-analysis" onclick="show('semantic-analysis')" style="background:var(--t-chip);border-color:var(--t-tx);color:var(--t-chip-tx)">
+          Semantic Analysis<span class="sub">NestJS · llm-client · RAG pipeline</span>
+        </div>
+        <div class="svc" id="svc-bug-predictor" onclick="show('bug-predictor')" style="background:var(--a-chip);border-color:var(--a-tx);color:var(--a-chip-tx)">
+          Bug Prediction<span class="sub">NestJS · llm-client · COT Prompting</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dom" style="background:var(--b-bg);border-color:var(--b-bd)">
+      <div class="dom-title" style="color:var(--b-tx)">Intelligence domain <span class="lang-badge lang-ts">TS</span></div>
+      <div class="svc-row" style="flex-direction:column">
+        <div class="svc" id="svc-llm-client" onclick="show('llm-client')" style="background:var(--p-chip);border-color:var(--p-tx);color:var(--p-chip-tx)">
+          Shared: LLM Client<span class="sub">@ai-code-reviewer/llm-client · Axios · Bifrost</span>
+        </div>
+        <div class="svc" id="svc-knowledge-graph" onclick="show('knowledge-graph')" style="background:var(--b-chip);border-color:var(--b-tx);color:var(--b-chip-tx)">
+          Knowledge Graph<span class="sub">NestJS · neo4j-driver · Cypher · Redis</span>
+        </div>
+        <div class="svc" id="svc-code-indexer" onclick="show('code-indexer')" style="background:var(--b-chip);border-color:var(--b-tx);color:var(--b-chip-tx)">
+          Code Indexer<span class="sub">NestJS · web-tree-sitter · llm-client · S3</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OUTPUT -->
+  <div class="dom" style="background:var(--g-bg);border-color:var(--g-bd)">
+    <div class="dom-title" style="color:var(--g-tx)">Output domain <span class="lang-badge lang-ts">TS</span></div>
+    <div class="svc-row">
+      <div class="svc" id="svc-aggregator" onclick="show('aggregator')" style="background:var(--g-chip);border-color:var(--g-tx);color:var(--g-chip-tx)">
+        Aggregator<span class="sub">NestJS · Prisma · PostgreSQL · scorer</span>
+      </div>
+      <div class="svc" id="svc-notification" onclick="show('notification')" style="background:var(--g-chip);border-color:var(--g-tx);color:var(--g-chip-tx)">
+        Notification<span class="sub">NestJS · Octokit · Slack Bolt JS</span>
+      </div>
+      <div class="svc" id="svc-dev-insights" onclick="show('dev-insights')" style="background:var(--g-chip);border-color:var(--g-tx);color:var(--g-chip-tx)">
+        Dev Insights<span class="sub">NestJS · TimescaleDB · Prisma</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- STORAGE -->
+  <div class="dom" style="background:var(--s-bg);border-color:var(--s-bd)">
+    <div class="dom-title" style="color:var(--s-tx)">Storage & Gateway</div>
+    <div class="svc-row">
+      <div class="svc" id="svc-bifrost" onclick="show('bifrost')" style="background:var(--b-bg);border-color:var(--b-tx);color:var(--b-tx)">Bifrost Gateway<span class="sub">LLM Routing · Proxy · Cache</span></div>
+      <div class="svc" id="svc-postgres" onclick="show('postgres')" style="background:var(--s-chip);border-color:var(--s-tx);color:var(--s-chip-tx)">PostgreSQL<span class="sub">reviews · users · data</span></div>
+      <div class="svc" id="svc-neo4j" onclick="show('neo4j')" style="background:var(--s-chip);border-color:var(--s-tx);color:var(--s-chip-tx)">Neo4j<span class="sub">knowledge graph</span></div>
+      <div class="svc" id="svc-pinecone" onclick="show('pinecone')" style="background:var(--s-chip);border-color:var(--s-tx);color:var(--s-chip-tx)">Pinecone<span class="sub">code embeddings</span></div>
+      <div class="svc" id="svc-redis" onclick="show('redis')" style="background:var(--s-chip);border-color:var(--s-tx);color:var(--s-chip-tx)">Redis<span class="sub">cache · rate limit</span></div>
+      <div class="svc" id="svc-s3" onclick="show('s3')" style="background:var(--s-chip);border-color:var(--s-tx);color:var(--s-chip-tx)">AWS S3<span class="sub">diffs · snapshots</span></div>
+    </div>
+  </div>
+
+  <div class="info-note">
+    <strong>Architectural Pivot:</strong> The Python LLM Gateway has been removed in favor of a shared TypeScript <strong>LLM Client</strong> that leverages <strong>Bifrost</strong> for multi-model routing and caching.
+  </div>
+
+  <div id="detail" class="detail">
+    <div class="placeholder">Click any service above to see its updated responsibilities and Bifrost-ready tech stack.</div>
+  </div>
+
+</div>
+
+<script>
+const D = {
+
+webhook: {
+  name: 'Webhook Service',
+  domain: 'Ingestion',
+  lang: 'ts',
+  dc: 'c',
+  desc: 'Entry point for all SCM events. Validates HMAC-SHA256 signatures on incoming payloads, normalizes them into a single unified PREvent Zod schema, then routes to Kafka topics: pr.events.raw or pr.events.merged.',
+  tech: [['NestJS', 'ts'], ['KafkaJS', 'ts'], ['Zod', 'ts'], ['HMAC-SHA256', 'ts']],
+  prod: ['pr.events.raw', 'pr.events.merged'],
+  cons: [],
+  apis: ['POST /webhooks/github', 'POST /webhooks/gitlab', 'GET /health'],
+  mig: 'Standard ingestion layer. Adding new SCMs requires a new normalizer class.',
+},
+
+'api-gateway': {
+  name: 'API Gateway',
+  domain: 'Ingestion',
+  lang: 'ts',
+  dc: 'c',
+  desc: 'External REST API serving the dashboard and CI integrations. Handles JWT auth, rate limiting via Redis, and proxies manual re-index requests directly to the Code Indexer.',
+  tech: [['NestJS', 'ts'], ['Passport JWT', 'ts'], ['ioredis', 'ts'], ['Prisma', 'ts']],
+  prod: ['pr.events.manual'],
+  cons: [],
+  apis: ['POST /analyze', 'GET /reviews/{pr_id}', 'POST /index/{repo_id}/reindex', 'GET /health'],
+  mig: 'Acts as the BFF (Backend for Frontend). Multi-model routing preferences are managed here.',
+},
+
+dashboard: {
+  name: 'Developer Dashboard',
+  domain: 'Ingestion',
+  lang: 'ts',
+  dc: 'c',
+  desc: 'Next.js 14 App Router frontend. Server Components fetch data from the API Gateway. Displays PR review results, inline comments, and developer insights.',
+  tech: [['Next.js 14', 'ts'], ['Tailwind CSS', 'ts'], ['NextAuth.js', 'ts']],
+  prod: [],
+  cons: [],
+  apis: ['Served at /', 'Server Actions for Apply Fix'],
+  mig: 'Responsive design. Shared API contract with VS Code extension.',
+},
+
+temporal: {
+  name: 'Temporal Worker',
+  domain: 'Orchestration',
+  lang: 'ts',
+  dc: 'p',
+  desc: 'NestJS service hosting durable workflows for PR reviews. Manages fan-out of analysis tasks and waits for the reviewComplete signal from the Aggregator.',
+  tech: [['NestJS', 'ts'], ['@temporalio/worker', 'ts'], ['KafkaJS', 'ts']],
+  prod: ['analysis.tasks.*'],
+  cons: ['pr.events.raw', 'pr.events.manual'],
+  apis: ['Signal: reviewComplete'],
+  mig: 'Ensures exactly-once processing of reviews even if analysis services crash.',
+},
+
+'static-analysis': {
+  name: 'Static Analysis Service',
+  domain: 'Analysis',
+  lang: 'ts',
+  dc: 't',
+  desc: 'Fast, deterministic analysis using web-tree-sitter WASM and Semgrep/CodeQL CLI subprocesses. Runs multiple tools in parallel via Promise.all().',
+  tech: [['NestJS', 'ts'], ['web-tree-sitter WASM', 'ts'], ['Semgrep CLI', 'ts']],
+  prod: ['analysis.results.static'],
+  cons: ['analysis.tasks.static'],
+  apis: ['Internal — Kafka-driven'],
+  mig: 'Standard analyzer pattern. High throughput, low latency.',
+},
+
+'semantic-analysis': {
+  name: 'Semantic Analysis Service',
+  domain: 'Analysis',
+  lang: 'ts',
+  dc: 't',
+  desc: 'Deep LLM-powered reasoning using RAG. Retrieves context from Pinecone and Knowledge Graph, then calls Bifrost via the shared @ai-code-reviewer/llm-client.',
+  tech: [['NestJS', 'ts'], ['@ai-code-reviewer/llm-client', 'ts'], ['@pinecone-database/pinecone', 'ts'], ['neo4j-driver', 'ts']],
+  prod: ['analysis.results.semantic'],
+  cons: ['analysis.tasks.semantic'],
+  apis: ['Internal — Kafka-driven'],
+  mig: 'Routes requests to "deep_reasoning" virtual model in Bifrost for high-quality analysis.',
+},
+
+'bug-predictor': {
+  name: 'Bug Prediction Service',
+  domain: 'Analysis',
+  lang: 'ts',
+  dc: 'a',
+  desc: 'Identifies high-risk patterns via chain-of-thought prompting. Uses @ai-code-reviewer/llm-client to hit Bifrost virtual models for specific prediction tasks.',
+  tech: [['NestJS', 'ts'], ['@ai-code-reviewer/llm-client', 'ts'], ['Zod', 'ts']],
+  prod: ['analysis.results.prediction'],
+  cons: ['analysis.tasks.prediction'],
+  apis: ['Internal — Kafka-driven'],
+  mig: 'Swappable backend — can easily pivot from LLM-based prediction to custom ML models.',
+},
+
+'llm-client': {
+  name: 'Shared: LLM Client',
+  domain: 'Intelligence',
+  lang: 'ts',
+  dc: 'p',
+  desc: 'Unified TypeScript package for all LLM interactions. Replaces the Python gateway by providing direct access to Bifrost OpenAI-compatible endpoints with task-based routing logic.',
+  tech: [['TypeScript', 'ts'], ['Axios', 'ts'], ['Bifrost (Gateway Target)', 'ts']],
+  prod: [],
+  cons: [],
+  apis: ['client.complete({ task_type, messages })', 'client.embed(texts)'],
+  mig: 'Simplifies monorepo infrastructure by removing service boundaries between TS logic and LLM gateway.',
+},
+
+'knowledge-graph': {
+  name: 'Knowledge Graph Service',
+  domain: 'Intelligence',
+  lang: 'ts',
+  dc: 'b',
+  desc: 'Single writer to Neo4j. Owning all graph updates through one service prevents race conditions. Answers structural queries for blast-radius and impact analysis.',
+  tech: [['NestJS', 'ts'], ['neo4j-driver', 'ts'], ['ioredis (cache)', 'ts']],
+  prod: [],
+  cons: [],
+  apis: ['POST /graph/patch', 'GET /impact/{id}', 'GET /risk/{path}'],
+  mig: 'Query results cached for 60s to reduce Neo4j load.',
+},
+
+'code-indexer': {
+  name: 'Code Indexer',
+  domain: 'Intelligence',
+  lang: 'ts',
+  dc: 'b',
+  desc: 'Background worker that re-indexes repositories on merge. Parses AST with tree-sitter, gets embeddings via @ai-code-reviewer/llm-client (Bifrost), and patches the graph.',
+  tech: [['NestJS', 'ts'], ['web-tree-sitter', 'ts'], ['@ai-code-reviewer/llm-client', 'ts'], ['S3', 'ts']],
+  prod: [],
+  cons: ['pr.events.merged'],
+  apis: ['POST /index/{repo_id}', 'GET /index/status'],
+  mig: 'Scales horizontally to handle massive monorepo re-indexing tasks.',
+},
+
+aggregator: {
+  name: 'Aggregator Service',
+  domain: 'Output',
+  lang: 'ts',
+  dc: 'g',
+  desc: 'Fan-in service that accumulates analysis results using workflow_id. Signals Temporal when the review is complete and persists the final Review object.',
+  tech: [['NestJS', 'ts'], ['Prisma', 'ts'], ['@temporalio/client', 'ts'], ['ioredis', 'ts']],
+  prod: ['notification.events'],
+  cons: ['analysis.results.*'],
+  apis: ['GET /review/{id}'],
+  mig: 'Handles graceful degradation if some analysis services time out.',
+},
+
+notification: {
+  name: 'Notification Service',
+  domain: 'Output',
+  lang: 'ts',
+  dc: 'g',
+  desc: 'Delivers review results to PRs (GitHub/GitLab) and Slack. Manages the "Apply Fix" flow by creating branches via Octokit.',
+  tech: [['NestJS', 'ts'], ['Octokit', 'ts'], ['Slack Bolt', 'ts']],
+  prod: [],
+  cons: ['notification.events'],
+  apis: ['POST /apply-fix'],
+  mig: 'Abstracted SCM clients allow easy addition of Bitbucket/Teams support.',
+},
+
+'dev-insights': {
+  name: 'Dev Insights Service',
+  domain: 'Output',
+  lang: 'ts',
+  dc: 'g',
+  desc: 'Surfaces long-term trends and developer behavioral patterns using TimescaleDB. Consumes the final aggregated review events.',
+  tech: [['NestJS', 'ts'], ['Prisma', 'ts'], ['TimescaleDB', 'ts']],
+  prod: [],
+  cons: ['notification.events'],
+  apis: ['GET /developer/{id}/insights'],
+  mig: 'Additive metrics captured without affecting the real-time analysis pipeline.',
+},
+
+'bifrost': {
+  name: 'Bifrost Gateway',
+  domain: 'Gateway',
+  lang: 'go',
+  dc: 'b',
+  desc: 'An external, containerized LLM gateway providing a unified OpenAI-compatible API for multi-provider routing. Handles high-performance Redis caching for identical prompts, provider fallback logic, and per-user/repo rate limiting. It abstracts the complexity of managing multiple API keys and provides virtual models (e.g., "deep_reasoning") used by the @ai-code-reviewer/llm-client.',
+  tech: [['Go (Bifrost Core)', 'go'], ['Docker', 'ts'], ['Redis (Prompt Cache)', 'ts']],
+  prod: [],
+  cons: [],
+  apis: ['POST /v1/chat/completions', 'POST /v1/embeddings'],
+  mig: 'External infrastructure component. Highly scalable and allows swapping LLM providers with zero downtime.',
+},
+
+'postgres': {
+  name: 'PostgreSQL',
+  domain: 'Storage',
+  lang: 'sql',
+  dc: 's',
+  desc: 'The primary relational database for the platform. Stores persistent review results, deduplicated findings, risk scores, user profiles, repository configurations, and team insights. Accessed via Prisma ORM for type-safety and automated migrations.',
+  tech: [['PostgreSQL 16', 'sql'], ['Prisma ORM', 'ts'], ['TimescaleDB Extension', 'sql']],
+  prod: [],
+  cons: [],
+  apis: ['Internal TCP connection'],
+  mig: 'Uses TimescaleDB extension in dev-insights for high-performance trend analysis without extra infra.',
+},
+
+'neo4j': {
+  name: 'Neo4j',
+  domain: 'Storage',
+  lang: 'cypher',
+  dc: 's',
+  desc: 'The structural knowledge graph of the codebase. Stores Abstract Syntax Tree (AST) nodes as vertices and relationships (CALLS, IMPORTS, EXTENDS) as edges. Enables complex structural queries like blast-radius calculation and impact analysis across module boundaries.',
+  tech: [['Neo4j Aura / Community', 'cypher'], ['Cypher Query Language', 'cypher'], ['neo4j-driver', 'ts']],
+  prod: [],
+  cons: [],
+  apis: ['Internal Bolt connection'],
+  mig: 'Single-writer pattern via Knowledge Graph service ensures no concurrent write conflicts.',
+},
+
+'pinecone': {
+  name: 'Pinecone',
+  domain: 'Storage',
+  lang: 'ts',
+  dc: 's',
+  desc: 'A managed vector database for semantic code search. Stores high-dimensional embeddings generated by voyage-code-2. Each repository is isolated in its own namespace (repo_id), allowing for extremely fast RAG (Retrieval Augmented Generation) context fetching during semantic analysis.',
+  tech: [['Pinecone Serverless', 'ts'], ['Vector Similarity Search', 'ts'], ['cosine-similarity', 'ts']],
+  prod: [],
+  cons: [],
+  apis: ['Internal gRPC / HTTP API'],
+  mig: 'Namespace-per-repo design ensures multi-tenant safety and low-latency retrieval.',
+},
+
+'redis': {
+  name: 'Redis',
+  domain: 'Storage',
+  lang: 'ts',
+  dc: 's',
+  desc: 'Multi-purpose in-memory data store. Used for Knowledge Graph query result caching (60s TTL), API Gateway rate limiting, Bifrost prompt/response caching, and Aggregator result accumulation before final persistence.',
+  tech: [['Redis 7.x', 'ts'], ['ioredis', 'ts'], ['Redis Hashes', 'ts']],
+  prod: [],
+  cons: [],
+  apis: ['Internal TCP connection'],
+  mig: 'Namespaced keys (kg:*, limit:*, bifrost:*) prevent collisions across different usage patterns.',
+},
+
+'s3': {
+  name: 'AWS S3 / MinIO',
+  domain: 'Storage',
+  lang: 'ts',
+  dc: 's',
+  desc: 'The long-term artifact store for the system. Saves raw git diffs, full file snapshots at specific commit SHAs, and generated analysis reports. Provides a durable audit trail for all reviews performed by the AI.',
+  tech: [['AWS S3 SDK', 'ts'], ['Object Storage', 'ts'], ['Bucket Lifecycle Policies', 'ts']],
+  prod: [],
+  cons: [],
+  apis: ['Internal HTTP / S3 Protocol'],
+  mig: 'Key structure: {repo_id}/{commit_sha}/{file_path}. Allows for point-in-time code retrieval without hitting the Git provider repeatedly.',
+},
+
+};
+
+const COLORS = { c:'--c', p:'--p', t:'--t', b:'--b', a:'--a', g:'--g', gr:'--gr', s:'--s' };
+const LANGS = { ts: 'TypeScript · NestJS', go: 'Go · Containerized', sql: 'SQL · Relational', cypher: 'Cypher · Graph' };
+let active = null;
+
+function show(id) {
+  if (active) {
+    const prev = document.getElementById('svc-' + active);
+    if (prev) prev.classList.remove('active');
+  }
+  active = id;
+  const el = document.getElementById('svc-' + id);
+  if (el) el.classList.add('active');
+  const d = D[id];
+  if (!d) return;
+  const cv = COLORS[d.dc];
+  
+  const techH = d.tech.map(([label, lang]) =>
+    `<span class="chip ch-tech">${label}</span>`
+  ).join('');
+
+  const prodH = d.prod.length
+    ? d.prod.map(t => `<span class="chip ch-prod">${t}</span>`).join('')
+    : '<span class="none-label">—</span>';
+
+  const consH = d.cons.length
+    ? d.cons.map(t => `<span class="chip ch-cons">${t}</span>`).join('')
+    : '<span class="none-label">—</span>';
+
+  const apiH = d.apis.map(a => `<span class="chip ch-api">${a}</span>`).join('');
+
+  document.getElementById('detail').innerHTML = `
+    <div class="det-head">
+      <span class="det-name">${d.name}</span>
+      <span class="det-badge" style="background:var(${cv}-bg);border:0.5px solid var(${cv}-bd);color:var(${cv}-tx)">${d.domain}</span>
+      <span class="det-lang-badge lang-ts">${LANGS[d.lang] || 'TypeScript · NestJS'}</span>
+    </div>
+    <div class="det-desc">${d.desc}</div>
+    <div class="sec"><div class="sec-label">Tech stack</div>${techH}</div>
+    <div class="kv-grid">
+      <div><div class="sec-label">Kafka — produces</div>${prodH}</div>
+      <div><div class="sec-label">Kafka — consumes</div>${consH}</div>
+    </div>
+    <div class="sec"><div class="sec-label">API surface</div>${apiH}</div>
+    <div class="mig"><div class="mig-label">Design context</div>${d.mig}</div>`;
+}
+</script>
+</body>
+</html>

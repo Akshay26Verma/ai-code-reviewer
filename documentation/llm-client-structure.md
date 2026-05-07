@@ -1,0 +1,9 @@
+packages/llm-client/
+├── src/
+│   ├── lib/
+│   │   └── llm-client.ts
+│   └── index.ts
+├── package.json
+├── project.json
+├── tsconfig.json
+└── tsconfig.lib.json

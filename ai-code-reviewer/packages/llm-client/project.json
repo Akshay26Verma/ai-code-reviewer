@@ -1,0 +1,33 @@
+{
+  "name": "llm-client",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/llm-client/src",
+  "projectType": "library",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:swc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/packages/llm-client",
+        "main": "packages/llm-client/src/index.ts",
+        "tsConfig": "packages/llm-client/tsconfig.lib.json",
+        "assets": ["packages/llm-client/*.md"]
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "outputs": ["{options.outputFile}"],
+      "options": {
+        "lintFilePatterns": ["packages/llm-client/**/*.ts"]
+      }
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "jestConfig": "packages/llm-client/jest.config.ts"
+      }
+    }
+  },
+  "tags": ["scope:intelligence"]
+}

@@ -16,7 +16,8 @@
     "paths": {
       "@ai-code-reviewer/types": ["./packages/types/src/index.ts"],
       "@ai-code-reviewer/schemas": ["./packages/schemas/src/index.ts"],
-      "@ai-code-reviewer/kafka": ["./packages/kafka/src/index.ts"]
+      "@ai-code-reviewer/kafka": ["./packages/kafka/src/index.ts"],
+      "@ai-code-reviewer/llm-client": ["./packages/llm-client/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp"]

@@ -1,0 +1,33 @@
+# Bifrost Configuration
+# This file is used to configure the self-hosted Bifrost LLM gateway.
+
+# Server configuration
+host: "0.0.0.0"
+port: 8080
+
+# Plugins configuration
+plugins:
+  # Exact Hash Caching (Low latency, deterministic)
+  cache:
+    enabled: true
+    type: "redis"
+    redis:
+      url: "redis://redis:6379/0"
+    ttl: 86400 # 24 hours
+    
+  # Semantic Caching (Optional, requires embedding model)
+  # semantic_cache:
+  #   enabled: false
+  #   vector_store: "redis"
+  #   threshold: 0.9
+
+# Governance / Routing
+# We will manage specific model aliases in the TS package for maximum flexibility,
+# but you can also define 'Virtual Models' here.
+virtual_models:
+  - name: "simple"
+    target: "groq/llama-3.1-8b-instant"
+  - name: "deep_reasoning"
+    target: "groq/llama-3.1-70b-versatile"
+  - name: "production"
+    target: "anthropic/claude-3-5-sonnet-20240620"

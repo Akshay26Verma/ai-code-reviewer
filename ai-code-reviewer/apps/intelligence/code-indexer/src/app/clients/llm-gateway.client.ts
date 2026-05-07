@@ -1,17 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
-import axios from 'axios';
+import { LLMClient } from '@ai-code-reviewer/llm-client';
 
 @Injectable()
 export class LLMGatewayClient {
   private readonly logger = new Logger(LLMGatewayClient.name);
-  private readonly baseUrl = process.env.LLM_GATEWAY_URL || 'http://localhost:8000';
+  private readonly client = new LLMClient();
 
-  async embed(texts: string[]): Promise<number[][]> {
+  async embed(texts: string[], repoId: string): Promise<number[][]> {
     try {
-      const response = await axios.post(`${this.baseUrl}/embed`, { texts });
-      return response.data.embeddings;
+      return await this.client.embed(texts, repoId);
     } catch (error) {
-      this.logger.error(`Failed to get embeddings from LLM Gateway: ${(error as Error).message}`);
+      this.logger.error(`Failed to get embeddings from Bifrost: ${(error as Error).message}`);
       throw error;
     }
   }

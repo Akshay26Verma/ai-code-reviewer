@@ -56,7 +56,7 @@ export class IndexerService {
       // 2. Generate Embeddings for nodes
       const textsToEmbed = nodes.map(n => n.content);
       if (textsToEmbed.length > 0) {
-        const embeddings = await this.llm.embed(textsToEmbed);
+        const embeddings = await this.llm.embed(textsToEmbed, repo_id);
         
         // 3. Prepare for Pinecone
         nodes.forEach((node, index) => {

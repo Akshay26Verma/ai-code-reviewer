@@ -1,21 +1,18 @@
-# Docker Compose for local development
-# Starts the LLM Gateway + shared Redis instance
+version: '3.8'
 
 services:
-  llm-gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  bifrost:
+    image: getbifrost/bifrost:latest
     ports:
-      - "8000:8000"
+      - "8080:8080"
+    volumes:
+      - ./infra/bifrost/bifrost.yaml:/app/bifrost.yaml
     env_file:
       - .env
     depends_on:
       redis:
         condition: service_healthy
-    volumes:
-      - ./app:/app/app  # Hot-reload app code during development
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: ["-config", "/app/bifrost.yaml"]
 
   redis:
     image: redis:7-alpine
