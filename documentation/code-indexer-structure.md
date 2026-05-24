@@ -16,6 +16,7 @@ apps/intelligence/code-indexer/
 │   │   │   ├── parser.module.ts
 │   │   │   └── parser.service.ts
 │   │   ├── storage/
+│   │   │   ├── hash-cache.service.ts
 │   │   │   ├── pinecone.service.ts
 │   │   │   ├── s3.service.ts
 │   │   │   └── storage.module.ts
@@ -23,6 +24,7 @@ apps/intelligence/code-indexer/
 │   └── main.ts
 ├── .env.example
 ├── project.json
+├── README.md
 ├── tsconfig.app.json
 ├── tsconfig.json
 └── webpack.config.js

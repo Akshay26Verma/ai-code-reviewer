@@ -5,5 +5,6 @@ packages/llm-client/
 │   └── index.ts
 ├── package.json
 ├── project.json
+├── README.md
 ├── tsconfig.json
 └── tsconfig.lib.json

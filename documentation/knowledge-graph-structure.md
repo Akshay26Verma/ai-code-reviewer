@@ -21,6 +21,7 @@ apps/intelligence/knowledge-graph/
 │   │   └── .gitkeep
 │   └── main.ts
 ├── project.json
+├── README.md
 ├── tsconfig.app.json
 ├── tsconfig.json
 └── webpack.config.js

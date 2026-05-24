@@ -4,7 +4,7 @@ An intelligent, multi-service platform designed for deep code analysis, knowledg
 
 ## 🏛️ Architecture Overview (The "Big Picture")
 
-AI Code Reviewer is built as a high-performance **Nx Monorepo**, ensuring seamless integration between core services and shared logic. 
+AI Code Reviewer is built as a high-performance **Nx Monorepo**, ensuring seamless integration between core services and shared logic.
 
 The heart of the platform is the **Intelligence Domain**, which continuously indexes source code into both vector and graph representations. This "Deep Understanding" layer allows the analysis services to move beyond simple pattern matching, providing context-aware reviews that understand cross-file dependencies and logical flow.
 
@@ -21,6 +21,7 @@ We have moved away from isolated service-specific LLM logic to a **Unified LLM S
 - **Structural Awareness**: Mapping relationships between code entities (classes, functions, modules) using **Neo4j** to perform impact and "blast-radius" analysis.
 - **Durable Orchestration**: Reliable PR review lifecycles managed by **Temporal**, ensuring no review task is ever lost even during service failures.
 - **Multi-SCM Integration**: Unified ingestion for GitHub, GitLab, and Bitbucket events.
+- **O(1) Batched Deletions**: File removals are handled with single-query batched operations in both Pinecone (via `$in` filter) and Neo4j (via `UNWIND` Cypher), eliminating sequential network overhead.
 
 ---
 
@@ -42,8 +43,8 @@ The platform is divided into five functional domains communicating asynchronousl
 - **Bug Prediction**: Chain-of-thought prompting service dedicated to identifying high-risk logic patterns.
 
 ### Intelligence Domain
-- **Code Indexer**: Background worker that parses ASTs, generates embeddings, and updates the knowledge graph.
-- **Knowledge Graph Service**: Manages the structural integrity and structural queries for the codebase in Neo4j.
+- **Code Indexer**: Background worker that parses ASTs, generates embeddings, deduplicates via Redis hash cache, and synchronizes the Vector DB and Knowledge Graph.
+- **Knowledge Graph Service**: Manages the structural integrity and structural queries for the codebase in Neo4j. Supports batched file-path based deletion.
 - **LLM Client (Shared)**: Standardized package for all model interactions via Bifrost.
 
 ### Output Domain
@@ -56,16 +57,16 @@ The platform is divided into five functional domains communicating asynchronousl
 ## 🛠️ The Power Stack
 
 - **Frameworks**: [Nx](https://nx.dev/), [NestJS](https://nestjs.com/), [Next.js 14](https://nextjs.org/)
-- **Databases**: 
+- **Databases**:
   - **Neo4j** (Graph Representation)
   - **Pinecone** (Vector Search / Embeddings)
   - **PostgreSQL** (Relational Data via Prisma)
-  - **Redis** (Caching & Rate Limiting)
+  - **Redis** (Hash Cache Deduplication & Query Caching)
 - **Infrastructure**:
   - **Kafka** (Asynchronous Messaging)
   - **Temporal** (Durable Workflows)
   - **Bifrost** (LLM Gateway)
-  - **AWS S3 / MinIO** (Artifact Storage)
+  - **AWS S3 / LocalStack** (Gzipped & Encrypted Artifact Storage)
 
 ---
 
