@@ -33,6 +33,7 @@ export const GraphPatchSchema = z.object({
   nodes: z.array(GraphNodeSchema).default([]),
   edges: z.array(GraphEdgeSchema).default([]),
   deleted_node_ids: z.array(z.string()).default([]),
+  deleted_file_paths: z.array(z.string()).default([]),
 });
 
 export type GraphEdge = z.infer<typeof GraphEdgeSchema>;

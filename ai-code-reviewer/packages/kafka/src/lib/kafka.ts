@@ -2,6 +2,7 @@ export enum KafkaTopics {
   PR_EVENTS_RAW = 'pr.events.raw',
   PR_EVENTS_MANUAL = 'pr.events.manual',
   PR_EVENTS_MERGED = 'pr.events.merged',
+  PR_EVENTS_INDEXED = 'pr.events.indexed',
   
   ANALYSIS_TASKS_STATIC = 'analysis.tasks.static',
   ANALYSIS_TASKS_SEMANTIC = 'analysis.tasks.semantic',

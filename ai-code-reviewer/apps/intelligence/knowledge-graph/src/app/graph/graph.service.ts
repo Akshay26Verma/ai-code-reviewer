@@ -129,7 +129,7 @@ export class GraphService {
    */
   async applyPatch(patch: GraphPatch) {
     this.logger.log(
-      `Applying patch for repo ${patch.repo_id}: ${patch.nodes.length} nodes, ${patch.edges.length} edges, ${patch.deleted_node_ids.length} deletions`,
+      `Applying patch for repo ${patch.repo_id}: ${patch.nodes.length} nodes, ${patch.edges.length} edges, ${patch.deleted_node_ids.length} deletions, ${patch.deleted_file_paths?.length || 0} file deletions`,
     );
 
     // 1. Delete removed nodes
@@ -139,6 +139,16 @@ export class GraphService {
          MATCH (n {id: nodeId, repo_id: $repoId})
          DETACH DELETE n`,
         { ids: patch.deleted_node_ids, repoId: patch.repo_id },
+      );
+    }
+
+    // 1b. Delete removed files (Option 2 - File-path based deletion)
+    if (patch.deleted_file_paths && patch.deleted_file_paths.length > 0) {
+      await this.neo4j.write(
+        `UNWIND $filePaths AS filePath
+         MATCH (n {file_path: filePath, repo_id: $repoId})
+         DETACH DELETE n`,
+        { filePaths: patch.deleted_file_paths, repoId: patch.repo_id },
       );
     }
 

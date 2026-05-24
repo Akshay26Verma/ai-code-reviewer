@@ -26,5 +26,15 @@ services:
     volumes:
       - redis-data:/data
 
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "127.0.0.1:4566:4566"
+    environment:
+      - SERVICES=s3
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - ../tmp/localstack-data:/var/lib/localstack
+
 volumes:
   redis-data:
