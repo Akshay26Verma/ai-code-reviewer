@@ -37,6 +37,7 @@
     "jsonc-eslint-parser": "^2.1.0",
     "nx": "22.7.1",
     "prettier": "~3.6.2",
+    "tree-sitter-wasms": "^0.1.13",
     "ts-jest": "^29.4.0",
     "ts-node": "10.9.1",
     "tslib": "^2.3.0",
@@ -60,6 +61,6 @@
     "neo4j-driver": "^6.0.1",
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
-    "web-tree-sitter": "^0.26.8"
+    "web-tree-sitter": "^0.20.8"
   }
 }
