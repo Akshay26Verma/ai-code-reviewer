@@ -94,7 +94,7 @@ body{font-family:var(--font-sans);padding:1rem;background:var(--main-bg);color:v
     </div>
   </div>
 
-  <div class="kafka-bar">⚡ Kafka Message Bus (KafkaJS) &nbsp;—&nbsp; <strong>Topics:</strong> pr.events.raw &nbsp;·&nbsp; pr.events.manual &nbsp;·&nbsp; pr.events.merged &nbsp;·&nbsp; analysis.tasks.* &nbsp;·&nbsp; analysis.results.*</div>
+  <div class="kafka-bar">⚡ Kafka Message Bus (KafkaJS) &nbsp;—&nbsp; <strong>Topics:</strong> pr.events.raw &nbsp;·&nbsp; pr.events.manual &nbsp;·&nbsp; pr.events.merged &nbsp;·&nbsp; pr.events.indexed &nbsp;·&nbsp; analysis.tasks.* &nbsp;·&nbsp; analysis.results.*</div>
 
   <!-- ORCHESTRATION -->
   <div class="dom" style="background:var(--p-bg);border-color:var(--p-bd)">
@@ -303,12 +303,12 @@ temporal: {
   domain: 'Intelligence',
   lang: 'ts',
   dc: 'b',
-  desc: 'Background worker that re-indexes repositories on merge. Parses AST with tree-sitter, gets embeddings via @ai-code-reviewer/llm-client (Bifrost), and patches the graph.',
-  tech: [['NestJS', 'ts'], ['web-tree-sitter', 'ts'], ['@ai-code-reviewer/llm-client', 'ts'], ['S3', 'ts']],
-  prod: [],
+  desc: 'Background worker that re-indexes repositories on merge. Parses AST with tree-sitter across 9 languages, gets embeddings via @ai-code-reviewer/llm-client (Bifrost), patches the graph, and emits a completion event.',
+  tech: [['NestJS', 'ts'], ['web-tree-sitter', 'ts'], ['tree-sitter-wasms', 'ts'], ['@ai-code-reviewer/llm-client', 'ts'], ['S3', 'ts']],
+  prod: ['pr.events.indexed'],
   cons: ['pr.events.merged'],
   apis: ['POST /index/{repo_id}', 'GET /index/status'],
-  mig: 'Scales horizontally to handle massive monorepo re-indexing tasks.',
+  mig: 'Uses precompiled WASM grammars for multi-language AST parsing and scales horizontally to handle massive monorepo re-indexing.',
 },
 
 aggregator: {

@@ -43,7 +43,7 @@ The platform is divided into five functional domains communicating asynchronousl
 - **Bug Prediction**: Chain-of-thought prompting service dedicated to identifying high-risk logic patterns.
 
 ### Intelligence Domain
-- **Code Indexer**: Background worker that parses ASTs, generates embeddings, deduplicates via Redis hash cache, and synchronizes the Vector DB and Knowledge Graph.
+- **Code Indexer**: Background worker that parses ASTs across 9 languages (TypeScript/TSX, JavaScript/JSX, Python, Java, Go, Rust, C#) using `web-tree-sitter` and precompiled WASM grammars, generates embeddings, deduplicates via Redis hash cache, and synchronizes the Vector DB and Knowledge Graph.
 - **Knowledge Graph Service**: Manages the structural integrity and structural queries for the codebase in Neo4j. Supports batched file-path based deletion.
 - **LLM Client (Shared)**: Standardized package for all model interactions via Bifrost.
 

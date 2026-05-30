@@ -13,8 +13,10 @@ apps/intelligence/code-indexer/
 │   │   │   ├── kafka.controller.ts
 │   │   │   └── kafka.module.ts
 │   │   ├── parser/
+│   │   │   ├── languages.config.ts
 │   │   │   ├── parser.module.ts
-│   │   │   └── parser.service.ts
+│   │   │   ├── parser.service.ts
+│   │   │   └── parser.smoke-test.ts
 │   │   ├── storage/
 │   │   │   ├── hash-cache.service.ts
 │   │   │   ├── pinecone.service.ts

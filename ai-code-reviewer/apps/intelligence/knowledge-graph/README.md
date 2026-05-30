@@ -51,3 +51,10 @@ The service connects to infrastructure using environment variables:
 - `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD`
 - `REDIS_URL` (default: `redis://localhost:6379/0`)
 - `KG_CACHE_TTL` (default: 60 seconds)
+
+---
+
+## ⚠️ Known Limitations
+
+- **Dangling CALLS Edges**: The Code Indexer's AST parser uses syntactic (not semantic) analysis. As a result, `CALLS` edges targeting built-in/stdlib methods (e.g., `Array.push`, `Map.get`) may arrive in graph patches with no corresponding target node in Neo4j. These edges are harmless (they do not affect query correctness for project functions) but add minor noise to the graph. A future upstream improvement using the TypeScript Compiler API will resolve call targets with full type information.
+

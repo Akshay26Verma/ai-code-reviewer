@@ -8,7 +8,7 @@ The Code Indexer is a critical background worker in the Intelligence Domain. It 
 
 - **Hybrid Architecture**: Runs concurrently as an HTTP NestJS server (for manual API re-indexing) and a Kafka consumer.
 - **Event-Driven**: Automatically triggers indexing pipelines upon receiving a message on the `pr.events.merged` Kafka topic.
-- **AST Parsing**: Uses `web-tree-sitter` (WebAssembly) to perform deep semantic parsing of changed code files to extract entities (functions, classes) and relationships (calls, imports).
+- **Multi-Language AST Parsing**: Uses `web-tree-sitter` (WebAssembly) with precompiled grammars from `tree-sitter-wasms` to perform deep semantic parsing of changed code files. Supports **TypeScript, TSX, JavaScript, JSX, Python, Java, Go, Rust, and C#**. Extracts entities (`FILE`, `CLASS`, `FUNCTION` nodes) and relationships (`CALLS`, `IMPORTS`, `EXTENDS`/`IMPLEMENTS` edges) via a single-pass DFS walker with scope-stack tracking. Language configurations are fully declarative in `languages.config.ts`.
 - **Redis Hash Cache Deduplication**: Uses `HashCacheService` to generate SHA-256 hashes of changed files. If a file's hash matches the cached key in Redis, it skips indexing. Cache is only updated *on successful processing* to avoid incorrect states.
 - **Vector Upserts**: Integrates with the shared `@ai-code-reviewer/llm-client` to generate model embeddings and stores them in Pinecone (namespaced per repository). Chunked in batches of 100 to ensure scale safety.
 - **S3 Snapshot Archiving**: Compresses raw source code snapshots (`gzipSync`) and uploads them to AWS S3 (or LocalStack in development) with `ServerSideEncryption: 'AES256'` enabled.
@@ -24,7 +24,7 @@ The Code Indexer is a critical background worker in the Intelligence Domain. It 
 This service is built using:
 - **NestJS**: Core framework.
 - **KafkaJS**: For consuming event streams from the ingestion layer and emitting `pr.events.indexed`.
-- **web-tree-sitter**: WASM-based code parser.
+- **web-tree-sitter + tree-sitter-wasms**: WASM-based code parser with precompiled grammars for 9 languages.
 - **Pinecone SDK**: For vector database operations.
 - **AWS SDK S3**: For gzipped/encrypted blob storage.
 - **Redis**: For hash-cache deduplication.
@@ -38,7 +38,7 @@ When a PR is merged, the indexing pipeline executes:
 1. **Validation**: Validates the payload structure.
 2. **Segregation**: Splits files into `changedFiles` and `removedFiles`.
 3. **Deduplication Check**: Queries Redis to skip unchanged files.
-4. **AST Parse & Embed**: Generates code nodes and requests embeddings from the Bifrost LLM Gateway.
+4. **AST Parse & Embed**: Loads the language-specific WASM grammar, parses the source into an AST, and walks the tree with a DFS scope-stack walker to extract `ParsedNode[]` (FILE, CLASS, FUNCTION — with full source content, line ranges, and hierarchical IDs like `file.ts#ClassName.methodName`) and `ParsedEdge[]` (CALLS, IMPORTS, EXTENDS). Then requests embeddings from the Bifrost LLM Gateway.
 5. **Archive**: Compresses and uploads snapshots to S3 (LocalStack in dev).
 6. **Batched Deletion**:
    - Deletes Pinecone vectors for removed files using `{ file_path: { $in: paths } }`.
@@ -68,3 +68,55 @@ Required environment variables in `.env`:
 * **Pinecone**: `PINECONE_API_KEY`, `PINECONE_INDEX`
 * **AWS S3**: `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`, `S3_ENDPOINT` (optional, for LocalStack dev)
 * **Internal APIs**: `KNOWLEDGE_GRAPH_URL`
+
+---
+
+## 🧩 Parser Architecture
+
+### Supported Languages
+
+| Extension | Language | WASM Grammar |
+|-----------|----------|--------------|
+| `.ts` | TypeScript | `tree-sitter-typescript.wasm` |
+| `.tsx` | TSX | `tree-sitter-tsx.wasm` |
+| `.js` | JavaScript | `tree-sitter-javascript.wasm` |
+| `.jsx` | JSX | `tree-sitter-javascript.wasm` |
+| `.py` | Python | `tree-sitter-python.wasm` |
+| `.java` | Java | `tree-sitter-java.wasm` |
+| `.go` | Go | `tree-sitter-go.wasm` |
+| `.rs` | Rust | `tree-sitter-rust.wasm` |
+| `.cs` | C# | `tree-sitter-c_sharp.wasm` |
+
+### Node & Edge Model
+
+**Nodes** (`ParsedNode`):
+- `FILE` — Root node representing the entire file (full source content).
+- `CLASS` — Class, struct, interface, trait, or enum declarations.
+- `FUNCTION` — Functions, methods, constructors, and arrow functions.
+
+Each node has a deterministic, scope-nested ID: `filePath#ClassName.methodName`.
+
+**Edges** (`ParsedEdge`):
+- `IMPORTS` — File → imported module path.
+- `CALLS` — Enclosing function/class → callee name.
+- `EXTENDS` / `IMPLEMENTS` — Class → base class or interface.
+
+### Adding a New Language
+
+1. Ensure the `.wasm` grammar file exists in `node_modules/tree-sitter-wasms/out/`.
+2. Add an entry to `LANGUAGE_CONFIGS` in `languages.config.ts` with the correct AST node types.
+3. Optionally add `extractImport`, `extractInheritance`, `extractName`, or `extractCallee` overrides for non-standard grammars.
+4. Run the smoke test to verify (see below).
+
+### Smoke Test
+
+```bash
+npx ts-node --project apps/intelligence/code-indexer/tsconfig.app.json \
+  apps/intelligence/code-indexer/src/app/parser/parser.smoke-test.ts
+```
+
+---
+
+## ⚠️ Known Limitations
+
+- **Dangling CALLS Edges**: Since `web-tree-sitter` performs syntactic (not semantic) parsing, calls to built-in/stdlib methods (e.g., `Array.push`, `Map.get`) are emitted as `CALLS` edges whose targets have no corresponding node in the knowledge graph. These create harmless dangling edges but add noise. Accurate resolution requires language-specific compiler/type-checker APIs (planned for TypeScript via the TS Compiler API).
