@@ -6,3 +6,14 @@ export interface PREvent {
   commit_sha: string;
   provider: 'github' | 'gitlab' | 'bitbucket';
 }
+
+export interface PRFileChange {
+  filename: string;
+  content: string;
+  status: 'added' | 'modified' | 'removed' | 'renamed';
+}
+
+export interface MergedPREvent extends PREvent {
+  action: 'merged';
+  files: PRFileChange[];
+}
