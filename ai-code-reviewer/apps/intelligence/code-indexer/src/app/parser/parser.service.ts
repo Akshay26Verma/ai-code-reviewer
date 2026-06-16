@@ -23,6 +23,34 @@ export interface ParseResult {
   edges: ParsedEdge[];
 }
 
+class ScopeTracker {
+  private scopes: Map<string, string>[] = [new Map()];
+
+  pushScope() {
+    this.scopes.push(new Map());
+  }
+
+  popScope() {
+    if (this.scopes.length > 1) {
+      this.scopes.pop();
+    }
+  }
+
+  set(varName: string, typeName: string) {
+    const current = this.scopes[this.scopes.length - 1];
+    current.set(varName, typeName);
+  }
+
+  get(varName: string): string | undefined {
+    for (let i = this.scopes.length - 1; i >= 0; i--) {
+      if (this.scopes[i].has(varName)) {
+        return this.scopes[i].get(varName);
+      }
+    }
+    return undefined;
+  }
+}
+
 @Injectable()
 export class ParserService implements OnModuleInit {
   private readonly logger = new Logger(ParserService.name);
@@ -176,6 +204,196 @@ export class ParserService implements OnModuleInit {
     const edges: ParsedEdge[] = [];
     const scopeStack: string[] = [];
 
+    const importMap = new Map<string, string>();
+    const scope = new ScopeTracker();
+
+    // 1. Resolve relative imports relative to the file being parsed.
+    //    When the import source has no extension (e.g. `./foo`), we append
+    //    the same extension as the file currently being parsed so that the
+    //    importMap key matches the node ID the indexer will assign to that
+    //    file (e.g. `foo.js` for JS files, `foo.ts` for TS files, etc.).
+    const resolveImportPath = (currentFilePath: string, importSource: string): string => {
+      if (importSource.startsWith('.')) {
+        const dir = path.dirname(currentFilePath);
+        let resolved = path.join(dir, importSource);
+        resolved = resolved.replace(/\\/g, '/');
+        if (!path.extname(resolved)) {
+          resolved += ext; // use the current file's extension, not a hardcoded '.ts'
+        }
+        return resolved;
+      }
+      return importSource;
+    };
+
+    // Helper to parse imports
+    const parseImportStatement = (node: Parser.SyntaxNode): { names: string[]; source: string } | null => {
+      const sourceNode = node.childForFieldName('source');
+      if (!sourceNode) return null;
+      const source = sourceNode.text.replace(/['"]/g, '');
+
+      const names: string[] = [];
+      const clause = node.childForFieldName('clause') || node.firstNamedChild;
+      if (clause) {
+        const namedImports = clause.childForFieldName('named_imports') || clause.descendantsOfType('named_imports')[0];
+        if (namedImports) {
+          namedImports.children.forEach(child => {
+            if (child.type === 'import_specifier') {
+              const aliasNode = child.childForFieldName('alias');
+              const nameNode = child.childForFieldName('name') || child.firstNamedChild;
+              const importedName = aliasNode?.text || nameNode?.text;
+              if (importedName) names.push(importedName);
+            }
+          });
+        }
+
+        const namespaceImport = clause.descendantsOfType('namespace_import')[0];
+        if (namespaceImport) {
+          const aliasNode = namespaceImport.childForFieldName('alias') || namespaceImport.firstNamedChild;
+          if (aliasNode) names.push(aliasNode.text);
+        }
+
+        const firstChild = clause.firstChild;
+        if (firstChild && firstChild.type === 'identifier') {
+          names.push(firstChild.text);
+        }
+      }
+
+      if (names.length === 0) {
+        node.descendantsOfType('identifier').forEach(id => {
+          names.push(id.text);
+        });
+      }
+
+      return { names, source };
+    };
+
+    // First pass to collect imports
+    const collectImports = (node: Parser.SyntaxNode) => {
+      if (node.type === 'import_statement') {
+        const parsed = parseImportStatement(node);
+        if (parsed) {
+          const resolvedPath = resolveImportPath(filePath, parsed.source);
+          parsed.names.forEach(name => {
+            importMap.set(name, resolvedPath);
+          });
+        }
+      }
+      for (let i = 0; i < node.childCount; i++) {
+        collectImports(node.child(i)!);
+      }
+    };
+    collectImports(root);
+
+    // Helpers to register scoped types
+    const registerClassFields = (classNode: Parser.SyntaxNode) => {
+      const body = classNode.childForFieldName('body') || classNode.descendantsOfType('class_body')[0];
+      if (!body) return;
+
+      for (let i = 0; i < body.childCount; i++) {
+        const child = body.child(i)!;
+
+        // Class fields
+        if (child.type === 'public_field_definition' || child.type === 'property_definition' || child.type === 'field_definition') {
+          const nameNode = child.childForFieldName('name') || child.firstNamedChild;
+          if (!nameNode) continue;
+
+          const typeNode = child.childForFieldName('type') || child.descendantsOfType('type_annotation')[0];
+          if (typeNode) {
+            const cleanType = typeNode.text.replace(/^:\s*/, '').trim();
+            scope.set(`this.${nameNode.text}`, cleanType);
+            scope.set(nameNode.text, cleanType);
+            continue;
+          }
+
+          const valueNode = child.childForFieldName('value');
+          if (valueNode && valueNode.type === 'new_expression') {
+            const constructorNode = valueNode.childForFieldName('constructor') || valueNode.firstNamedChild;
+            if (constructorNode) {
+              scope.set(`this.${nameNode.text}`, constructorNode.text);
+              scope.set(nameNode.text, constructorNode.text);
+            }
+          }
+        }
+
+        // Constructor parameters
+        if (child.type === 'method_definition') {
+          const nameNode = child.childForFieldName('name');
+          if (nameNode && nameNode.text === 'constructor') {
+            const parametersNode = child.childForFieldName('parameters');
+            if (parametersNode) {
+              parametersNode.children.forEach(param => {
+                // tree-sitter-typescript WASM may emit constructor DI params as:
+                //   parameter_property  (newer grammar)      OR
+                //   required_parameter with an accessibility_modifier child (older WASM)
+                const isParameterProperty = param.type === 'parameter_property';
+                const isAccessibleRequired =
+                  param.type === 'required_parameter' &&
+                  param.children.some(c =>
+                    c.type === 'accessibility_modifier' ||
+                    ['public', 'private', 'protected'].includes(c.text),
+                  );
+
+                if (!isParameterProperty && !isAccessibleRequired) return;
+
+                const typeAnnotations = param.descendantsOfType('type_annotation');
+                const identifiers = param.descendantsOfType('identifier')
+                  .filter(id => !['public', 'private', 'protected', 'readonly', 'override'].includes(id.text));
+
+
+                const fieldName = identifiers[0] ?? null;
+                const typeAnnotation = typeAnnotations[0] ?? null;
+
+                if (fieldName && typeAnnotation) {
+                  const cleanType = typeAnnotation.text.replace(/^:\s*/, '').trim();
+                  scope.set(`this.${fieldName.text}`, cleanType);
+                  scope.set(fieldName.text, cleanType);
+                }
+              });
+
+            }
+          }
+        }
+      }
+    };
+
+    const registerFunctionParameters = (funcNode: Parser.SyntaxNode) => {
+      const parametersNode = funcNode.childForFieldName('parameters');
+      if (!parametersNode) return;
+
+      parametersNode.children.forEach(param => {
+        let nameNode: Parser.SyntaxNode | null = null;
+        let typeNode: Parser.SyntaxNode | null = null;
+
+        if (param.type === 'required_parameter' || param.type === 'parameter') {
+          nameNode = param.childForFieldName('name') || param.firstNamedChild;
+          typeNode = param.childForFieldName('type') || param.descendantsOfType('type_annotation')[0];
+        }
+
+        if (nameNode && typeNode) {
+          const cleanType = typeNode.text.replace(/^:\s*/, '').trim();
+          scope.set(nameNode.text, cleanType);
+        }
+      });
+    };
+
+    const resolveCalleeTarget = (calleeNode: Parser.SyntaxNode): { typeName: string; methodName: string } | null => {
+      if (calleeNode.type === 'member_expression') {
+        const objectNode = calleeNode.childForFieldName('object');
+        const propertyNode = calleeNode.childForFieldName('property');
+        if (objectNode && propertyNode) {
+          const objectText = objectNode.text;
+          const methodName = propertyNode.text;
+
+          const resolvedType = scope.get(objectText);
+
+          if (resolvedType) {
+            return { typeName: resolvedType, methodName };
+          }
+        }
+      }
+      return null;
+    };
+
     // Emit the FILE node as the top-level root
     const fileNodeId = filePath;
     nodes.push({
@@ -202,7 +420,21 @@ export class ParserService implements OnModuleInit {
             });
           }
         }
-        return; // Usually imports do not have nested child structures of interest
+        return; // Import nodes have no child structures of interest
+      }
+
+      // 1b. Scope-only nodes: push a named scope without emitting a graph node.
+      //     Used for Rust impl blocks to avoid duplicate IDs with their struct_item.
+      if (config.scopeNodeTypes?.includes(node.type)) {
+        const name = config.extractScopeName?.(node) ?? `<scope_L${node.startPosition.row + 1}>`;
+        scopeStack.push(name);
+        scope.pushScope();
+        for (let i = 0; i < node.childCount; i++) {
+          traverse(node.child(i)!);
+        }
+        scopeStack.pop();
+        scope.popScope();
+        return;
       }
 
       // 2. Check for CLASSES
@@ -227,34 +459,32 @@ export class ParserService implements OnModuleInit {
             for (const base of bases) {
               edges.push({
                 source: id,
-                target: base,
-                relationship: 'EXTENDS', // Mapping standard extends/implements
+                target: base.name,
+                relationship: base.relationship,
               });
             }
           }
         } else {
-          // Standard walk fallback for class inheritance nodes
+          // Fallback: walk children and emit edges based on extendsNodeTypes / implementsNodeTypes
           for (let i = 0; i < node.childCount; i++) {
             const child = node.child(i)!;
-            if (config.inheritanceNodeTypes.includes(child.type)) {
-              // Extract names from within the inheritance clause
-              const baseName = child.text;
-              if (baseName) {
-                edges.push({
-                  source: id,
-                  target: baseName,
-                  relationship: 'EXTENDS',
-                });
-              }
+            if (config.extendsNodeTypes.includes(child.type)) {
+              edges.push({ source: id, target: child.text, relationship: 'EXTENDS' });
+            } else if (config.implementsNodeTypes.includes(child.type)) {
+              edges.push({ source: id, target: child.text, relationship: 'IMPLEMENTS' });
             }
           }
         }
+
+        scope.pushScope();
+        registerClassFields(node);
 
         scopeStack.push(name);
         for (let i = 0; i < node.childCount; i++) {
           traverse(node.child(i)!);
         }
         scopeStack.pop();
+        scope.popScope();
         return;
       }
 
@@ -273,29 +503,67 @@ export class ParserService implements OnModuleInit {
           end_line: node.endPosition.row + 1,
         });
 
+        scope.pushScope();
+        registerFunctionParameters(node);
+
         scopeStack.push(name);
         for (let i = 0; i < node.childCount; i++) {
           traverse(node.child(i)!);
         }
         scopeStack.pop();
+        scope.popScope();
         return;
+      }
+
+      // 3b. Check for Lexical Variable Declarations within blocks
+      if (node.type === 'variable_declarator') {
+        const nameNode = node.childForFieldName('name');
+        if (nameNode) {
+          const typeNode = node.childForFieldName('type') || node.descendantsOfType('type_annotation')[0];
+          if (typeNode) {
+            const cleanType = typeNode.text.replace(/^:\s*/, '').trim();
+            scope.set(nameNode.text, cleanType);
+          } else {
+            const valueNode = node.childForFieldName('value');
+            if (valueNode && valueNode.type === 'new_expression') {
+              const constructorNode = valueNode.childForFieldName('constructor') || valueNode.firstNamedChild;
+              if (constructorNode) {
+                scope.set(nameNode.text, constructorNode.text);
+              }
+            }
+          }
+        }
       }
 
       // 4. Check for CALLS inside scopes
       if (config.callNodeTypes.includes(node.type)) {
+        const calleeNode = node.childForFieldName('function') || node.firstNamedChild;
         const callee = this.extractCalleeName(node, config);
-        if (callee) {
+        
+        if (calleeNode && callee) {
           const currentCallerScope = scopeStack.length > 0
             ? `${filePath}#${scopeStack.join('.')}`
             : fileNodeId;
 
-          edges.push({
-            source: currentCallerScope,
-            target: callee,
-            relationship: 'CALLS',
-          });
+          const resolved = resolveCalleeTarget(calleeNode);
+          if (resolved) {
+            const importPath = importMap.get(resolved.typeName);
+            const targetFile = importPath || fileNodeId;
+            const calleeId = `${targetFile}#${resolved.typeName}.${resolved.methodName}`;
+
+            edges.push({
+              source: currentCallerScope,
+              target: calleeId,
+              relationship: 'CALLS',
+            });
+          } else {
+            edges.push({
+              source: currentCallerScope,
+              target: callee,
+              relationship: 'CALLS',
+            });
+          }
         }
-        // Do not return; children of calls must be walked (e.g. nested calls: foo(bar()))
       }
 
       // Recurse children

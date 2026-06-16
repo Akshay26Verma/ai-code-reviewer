@@ -30,8 +30,11 @@ export interface LanguageConfig {
   /** AST node types that represent import/require statements */
   importNodeTypes: string[];
 
-  /** AST node types that represent class inheritance (extends/implements) */
-  inheritanceNodeTypes: string[];
+  /** AST node types that represent class extension (extends keyword) */
+  extendsNodeTypes: string[];
+
+  /** AST node types that represent interface implementation (implements keyword) */
+  implementsNodeTypes: string[];
 
   // ── Optional Language-Specific Overrides ─────────────────────────────────
 
@@ -41,11 +44,26 @@ export interface LanguageConfig {
   /** Override to extract import target paths */
   extractImport?: (node: Parser.SyntaxNode) => string | null;
 
-  /** Override to extract base classes or interfaces for inheritance edges */
-  extractInheritance?: (node: Parser.SyntaxNode) => string[] | null;
+  /**
+   * Override to extract base classes and interfaces for inheritance edges.
+   * Each entry carries the resolved relationship so EXTENDS and IMPLEMENTS
+   * can be emitted correctly. Falls back to extendsNodeTypes/implementsNodeTypes
+   * when not defined.
+   */
+  extractInheritance?: (node: Parser.SyntaxNode) => { name: string; relationship: 'EXTENDS' | 'IMPLEMENTS' }[] | null;
 
   /** Override to extract the callee (function name) of a call expression */
   extractCallee?: (node: Parser.SyntaxNode) => string | null;
+
+  /**
+   * Node types that push a named scope onto the stack without emitting a graph
+   * node themselves. Used for Rust impl blocks, which share their name with the
+   * struct they implement and would otherwise create duplicate node IDs.
+   */
+  scopeNodeTypes?: string[];
+
+  /** Extracts the scope name for a scopeNodeTypes node (e.g. the struct name from an impl block). */
+  extractScopeName?: (node: Parser.SyntaxNode) => string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -66,10 +84,33 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     ],
     callNodeTypes: ['call_expression', 'new_expression'],
     importNodeTypes: ['import_statement'],
-    inheritanceNodeTypes: ['extends_clause', 'implements_clause'],
+    extendsNodeTypes: ['extends_clause'],
+    implementsNodeTypes: ['implements_clause'],
     extractImport: (node) => {
       // import { X } from 'source'
       return node.childForFieldName('source')?.text?.replace(/['"]/g, '') || null;
+    },
+    extractInheritance: (node) => {
+      // extends_clause / implements_clause may be wrapped in a class_heritage
+      // intermediate node — use descendantsOfType to find them at any depth.
+      const results: { name: string; relationship: 'EXTENDS' | 'IMPLEMENTS' }[] = [];
+      node.descendantsOfType('extends_clause').forEach(clause => {
+        clause.children.forEach(child => {
+          if (child.type === 'extends') return;
+          // expression_with_type_arguments wraps generic base types like React.Component<Props>
+          const name = (child.childForFieldName('expression')?.text ?? child.text).split('<')[0].trim();
+          if (name) results.push({ name, relationship: 'EXTENDS' });
+        });
+      });
+      node.descendantsOfType('implements_clause').forEach(clause => {
+        clause.children.forEach(child => {
+          if (child.type === 'implements' || child.type === ',') return;
+          // generic_type wraps types like IRepository<User> — take just the name
+          const name = (child.childForFieldName('name')?.text ?? child.text).split('<')[0].trim();
+          if (name) results.push({ name, relationship: 'IMPLEMENTS' });
+        });
+      });
+      return results.length > 0 ? results : null;
     },
   },
 
@@ -86,9 +127,28 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     ],
     callNodeTypes: ['call_expression', 'new_expression'],
     importNodeTypes: ['import_statement'],
-    inheritanceNodeTypes: ['extends_clause', 'implements_clause'],
+    extendsNodeTypes: ['extends_clause'],
+    implementsNodeTypes: ['implements_clause'],
     extractImport: (node) => {
       return node.childForFieldName('source')?.text?.replace(/['"]/g, '') || null;
+    },
+    extractInheritance: (node) => {
+      const results: { name: string; relationship: 'EXTENDS' | 'IMPLEMENTS' }[] = [];
+      node.descendantsOfType('extends_clause').forEach(clause => {
+        clause.children.forEach(child => {
+          if (child.type === 'extends') return;
+          const name = (child.childForFieldName('expression')?.text ?? child.text).split('<')[0].trim();
+          if (name) results.push({ name, relationship: 'EXTENDS' });
+        });
+      });
+      node.descendantsOfType('implements_clause').forEach(clause => {
+        clause.children.forEach(child => {
+          if (child.type === 'implements' || child.type === ',') return;
+          const name = (child.childForFieldName('name')?.text ?? child.text).split('<')[0].trim();
+          if (name) results.push({ name, relationship: 'IMPLEMENTS' });
+        });
+      });
+      return results.length > 0 ? results : null;
     },
   },
 
@@ -105,9 +165,35 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     ],
     callNodeTypes: ['call_expression', 'new_expression'],
     importNodeTypes: ['import_statement'],
-    inheritanceNodeTypes: ['extends_clause'],
+    extendsNodeTypes: ['extends_clause'],
+    implementsNodeTypes: [],
     extractImport: (node) => {
       return node.childForFieldName('source')?.text?.replace(/['"]/g, '') || null;
+    },
+    extractInheritance: (node) => {
+      // tree-sitter-javascript uses extends_clause in some grammar versions and
+      // class_heritage in others. Try extends_clause first; fall back to class_heritage.
+      const results: { name: string; relationship: 'EXTENDS' | 'IMPLEMENTS' }[] = [];
+      const extendsClauses = node.descendantsOfType('extends_clause');
+      if (extendsClauses.length > 0) {
+        extendsClauses.forEach(clause => {
+          clause.children.forEach(child => {
+            if (child.type === 'extends') return;
+            results.push({ name: child.text.split('<')[0].trim(), relationship: 'EXTENDS' });
+          });
+        });
+      } else {
+        node.descendantsOfType('class_heritage').forEach(clause => {
+          // class_heritage: "extends" <expression> — skip the keyword at index 0
+          for (let i = 1; i < clause.childCount; i++) {
+            const child = clause.child(i)!;
+            if (child.type !== ',') {
+              results.push({ name: child.text.split('<')[0].trim(), relationship: 'EXTENDS' });
+            }
+          }
+        });
+      }
+      return results.length > 0 ? results : null;
     },
   },
 
@@ -124,9 +210,32 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     ],
     callNodeTypes: ['call_expression', 'new_expression'],
     importNodeTypes: ['import_statement'],
-    inheritanceNodeTypes: ['extends_clause'],
+    extendsNodeTypes: ['extends_clause'],
+    implementsNodeTypes: [],
     extractImport: (node) => {
       return node.childForFieldName('source')?.text?.replace(/['"]/g, '') || null;
+    },
+    extractInheritance: (node) => {
+      const results: { name: string; relationship: 'EXTENDS' | 'IMPLEMENTS' }[] = [];
+      const extendsClauses = node.descendantsOfType('extends_clause');
+      if (extendsClauses.length > 0) {
+        extendsClauses.forEach(clause => {
+          clause.children.forEach(child => {
+            if (child.type === 'extends') return;
+            results.push({ name: child.text.split('<')[0].trim(), relationship: 'EXTENDS' });
+          });
+        });
+      } else {
+        node.descendantsOfType('class_heritage').forEach(clause => {
+          for (let i = 1; i < clause.childCount; i++) {
+            const child = clause.child(i)!;
+            if (child.type !== ',') {
+              results.push({ name: child.text.split('<')[0].trim(), relationship: 'EXTENDS' });
+            }
+          }
+        });
+      }
+      return results.length > 0 ? results : null;
     },
   },
 
@@ -138,23 +247,27 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     functionNodeTypes: ['function_definition'],
     callNodeTypes: ['call'],
     importNodeTypes: ['import_statement', 'import_from_statement'],
-    inheritanceNodeTypes: ['argument_list'],
+    // Python has no implements keyword — all base classes are EXTENDS
+    extendsNodeTypes: [],
+    implementsNodeTypes: [],
     extractImport: (node) => {
       if (node.type === 'import_from_statement') {
-        // from path.to.module import name -> "path.to.module"
-        return node.childForFieldName('module')?.text || null;
+        // tree-sitter-python names this field 'module_name'; fall back to positional child(1)
+        return node.childForFieldName('module_name')?.text
+          || node.childForFieldName('module')?.text
+          || node.child(1)?.text
+          || null;
       }
       // import os -> "os"
       return node.child(1)?.text || null;
     },
     extractInheritance: (node) => {
-      // In python, class declarations list base classes inside their arguments:
-      // class Foo(Base1, Base2):
+      // class Foo(Base1, Base2): — all bases are EXTENDS in Python
       const argList = node.childForFieldName('superclasses');
       if (!argList) return null;
       return argList.children
         .filter((c) => c.type === 'identifier' || c.type === 'attribute')
-        .map((c) => c.text);
+        .map((c) => ({ name: c.text, relationship: 'EXTENDS' as const }));
     },
   },
 
@@ -166,24 +279,29 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     functionNodeTypes: ['method_declaration', 'constructor_declaration'],
     callNodeTypes: ['method_invocation', 'object_creation_expression'],
     importNodeTypes: ['import_declaration'],
-    inheritanceNodeTypes: ['superclass', 'super_interfaces'],
+    // Java distinguishes extends/implements at AST level via superclass vs super_interfaces nodes
+    extendsNodeTypes: [],
+    implementsNodeTypes: [],
     extractImport: (node) => {
       // import java.util.List; -> "java.util.List"
       return node.child(1)?.text || null;
     },
     extractInheritance: (node) => {
-      const bases: string[] = [];
+      const bases: { name: string; relationship: 'EXTENDS' | 'IMPLEMENTS' }[] = [];
       for (let i = 0; i < node.childCount; i++) {
         const child = node.child(i)!;
         if (child.type === 'superclass') {
-          // "extends BaseController" -> "BaseController"
+          // "extends BaseController" -> EXTENDS BaseController
           const name = child.child(1)?.text;
-          if (name) bases.push(name);
+          if (name) bases.push({ name, relationship: 'EXTENDS' });
         } else if (child.type === 'super_interfaces') {
-          // "implements I1, I2" -> extract interface names
+          // "implements I1, I2" -> IMPLEMENTS I1, IMPLEMENTS I2
           const typeList = child.child(1);
           if (typeList) {
-            bases.push(...typeList.text.split(',').map((s) => s.trim()));
+            typeList.text.split(',')
+              .map((s) => s.trim())
+              .filter(Boolean)
+              .forEach((name) => bases.push({ name, relationship: 'IMPLEMENTS' }));
           }
         }
       }
@@ -208,10 +326,13 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     classNodeTypes: ['type_spec'],
     functionNodeTypes: ['function_declaration', 'method_declaration'],
     callNodeTypes: ['call_expression'],
-    importNodeTypes: ['import_declaration'],
-    inheritanceNodeTypes: [],
+    // import_spec covers both single (`import "fmt"`) and grouped (`import ( "fmt" )`) forms
+    importNodeTypes: ['import_spec'],
+    // Go uses structural typing — no explicit extends/implements keywords
+    extendsNodeTypes: [],
+    implementsNodeTypes: [],
     extractImport: (node) => {
-      // import "fmt" -> "fmt"
+      // import_spec always has a path field
       return node.childForFieldName('path')?.text?.replace(/['"]/g, '') || null;
     },
   },
@@ -220,14 +341,32 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
   '.rs': {
     name: 'Rust',
     wasmFile: 'tree-sitter-rust.wasm',
-    classNodeTypes: ['struct_item', 'enum_item', 'trait_item', 'impl_item'],
+    // impl_item is intentionally excluded here — it is handled as a scope
+    // container via scopeNodeTypes to avoid duplicate node IDs with struct_item
+    classNodeTypes: ['struct_item', 'enum_item', 'trait_item'],
     functionNodeTypes: ['function_item'],
     callNodeTypes: ['call_expression'],
     importNodeTypes: ['use_declaration'],
-    inheritanceNodeTypes: [],
+    // Rust has no class inheritance
+    extendsNodeTypes: [],
+    implementsNodeTypes: [],
     extractImport: (node) => {
       // use std::collections::HashMap; -> "std::collections::HashMap"
       return node.child(1)?.text || null;
+    },
+    scopeNodeTypes: ['impl_item'],
+    extractScopeName: (node) => {
+      // impl Cache { ... }            -> scope "Cache"
+      // impl Trait for Cache { ... }  -> scope "Cache" (the concrete type)
+      const forIdx = node.children.findIndex((c) => c.type === 'for');
+      if (forIdx >= 0) {
+        // Type after the `for` keyword is the concrete implementing type
+        return node.children[forIdx + 1]?.text ?? null;
+      }
+      // No `for` — first type identifier after the `impl` keyword
+      return node.childForFieldName('name')?.text
+        ?? node.descendantsOfType('type_identifier')[0]?.text
+        ?? null;
     },
   },
 
@@ -239,19 +378,24 @@ export const LANGUAGE_CONFIGS: Record<string, LanguageConfig> = {
     functionNodeTypes: ['method_declaration', 'constructor_declaration'],
     callNodeTypes: ['invocation_expression', 'object_creation_expression'],
     importNodeTypes: ['using_directive'],
-    inheritanceNodeTypes: ['base_list'],
+    // base_list is handled by extractInheritance; these fallback arrays are unused for C#
+    extendsNodeTypes: [],
+    implementsNodeTypes: [],
     extractImport: (node) => {
       // using System; -> "System"
       return node.child(1)?.text || null;
     },
     extractInheritance: (node) => {
-      // base_list contains children starting with ":"
+      // C# syntax `: BaseClass, IInterface` does not distinguish base class from interfaces
+      // at the AST level without type information. All entries are emitted as EXTENDS.
       for (let i = 0; i < node.childCount; i++) {
         const child = node.child(i)!;
         if (child.type === 'base_list') {
-          // ": IService, IBase"
           const clean = child.text.replace(/^:\s*/, '');
-          return clean.split(',').map((s) => s.trim());
+          return clean.split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .map((name) => ({ name, relationship: 'EXTENDS' as const }));
         }
       }
       return null;
