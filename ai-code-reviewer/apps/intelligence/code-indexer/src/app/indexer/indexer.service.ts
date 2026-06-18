@@ -23,6 +23,19 @@ export class IndexerService {
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
   ) {}
 
+  private readonly EXCLUDED_PATTERNS = [
+    /node_modules\//,
+    /vendor\//,
+    /bower_components\//,
+    /dist\//,
+    /build\//,
+    /\.git\//,
+  ];
+
+  private shouldExcludeFile(filePath: string): boolean {
+    return this.EXCLUDED_PATTERNS.some((pattern) => pattern.test(filePath));
+  }
+
   /**
    * Processes a merged PR event:
    * 1. Parses AST from changed files
@@ -56,6 +69,11 @@ export class IndexerService {
       try {
         if (!file.filename || !file.content) {
           this.logger.warn(`Skipping invalid changed file in payload: ${JSON.stringify(file)}`);
+          continue;
+        }
+
+        if (this.shouldExcludeFile(file.filename)) {
+          this.logger.debug(`Skipping excluded path: ${file.filename}`);
           continue;
         }
 
@@ -117,7 +135,8 @@ export class IndexerService {
     if (removedFiles.length > 0) {
       const pathsToDelete = removedFiles
         .map((f: any) => f.filename)
-        .filter((filename: any): filename is string => !!filename);
+        .filter((filename: any): filename is string => !!filename)
+        .filter((filename: string) => !this.shouldExcludeFile(filename));
 
       if (pathsToDelete.length > 0) {
         try {
