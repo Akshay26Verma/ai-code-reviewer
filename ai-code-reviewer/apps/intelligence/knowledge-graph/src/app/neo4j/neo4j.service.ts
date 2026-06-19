@@ -8,7 +8,7 @@ export class Neo4jService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleInit() {
     const uri = process.env.NEO4J_URI || 'bolt://localhost:7687';
-    const user = process.env.NEO4J_USER || 'neo4j';
+    const user = process.env.NEO4J_USERNAME || 'neo4j';
     const password = process.env.NEO4J_PASSWORD || 'password';
 
     this.driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
@@ -16,8 +16,30 @@ export class Neo4jService implements OnModuleInit, OnModuleDestroy {
     try {
       await this.driver.verifyConnectivity();
       this.logger.log(`Connected to Neo4j at ${uri}`);
+
+      // Initialize indexes and constraints
+      const session = this.driver.session();
+      try {
+        await session.executeWrite((tx) =>
+          tx.run(
+            `CREATE CONSTRAINT entity_id_unique IF NOT EXISTS
+             FOR (e:ENTITY) REQUIRE e.id IS UNIQUE`
+          )
+        );
+        this.logger.log('Neo4j ENTITY constraint verified/created');
+
+        await session.executeWrite((tx) =>
+          tx.run(
+            `CREATE INDEX file_path_index IF NOT EXISTS
+             FOR (f:FILE) ON (f.file_path)`
+          )
+        );
+        this.logger.log('Neo4j FILE file_path index verified/created');
+      } finally {
+        await session.close();
+      }
     } catch (error) {
-      this.logger.error(`Failed to connect to Neo4j: ${error}`);
+      this.logger.error(`Failed to connect or initialize constraints in Neo4j: ${error}`);
     }
   }
 

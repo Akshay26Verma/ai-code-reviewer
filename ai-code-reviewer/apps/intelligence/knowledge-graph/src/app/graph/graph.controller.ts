@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Body, Param, UsePipes } from '@nestjs/common';
 import { GraphService } from './graph.service';
 import { GraphPatchSchema, GraphPatch } from './graph.schemas';
-import { ZodValidationPipe } from '../utils/zod-validation.pipe'; // Will create this
+import { ZodValidationPipe } from '../utils/zod-validation.pipe';
 
 @Controller('graph')
 export class GraphController {

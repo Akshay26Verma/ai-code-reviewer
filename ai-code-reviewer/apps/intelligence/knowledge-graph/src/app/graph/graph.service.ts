@@ -22,7 +22,7 @@ export class GraphService {
     if (cached) return cached;
 
     const results = await this.neo4j.read(
-      `MATCH (caller)-[:CALLS]->(fn {id: $fnId})
+      `MATCH (caller:ENTITY)-[:CALLS]->(fn:ENTITY {id: $fnId})
        RETURN caller.id AS id, caller.name AS name, caller.file_path AS file_path`,
       { fnId },
     );
@@ -41,7 +41,7 @@ export class GraphService {
     if (cached) return cached;
 
     const results = await this.neo4j.read(
-      `MATCH (m {id: $moduleId})-[:IMPORTS|DEPENDS_ON]->(dep)
+      `MATCH (m:ENTITY {id: $moduleId})-[:IMPORTS|DEPENDS_ON]->(dep:ENTITY)
        RETURN dep.id AS id, dep.name AS name, dep.type AS type, dep.file_path AS file_path`,
       { moduleId },
     );
@@ -60,7 +60,7 @@ export class GraphService {
     if (cached) return cached;
 
     const results = await this.neo4j.read(
-      `MATCH (fn {id: $fnId})<-[:CALLS*1..3]-(affected)
+      `MATCH (fn:ENTITY {id: $fnId})<-[:CALLS*1..3]-(affected:ENTITY)
        RETURN DISTINCT affected.id AS id, affected.name AS name,
               affected.file_path AS file_path, affected.type AS type`,
       { fnId },
@@ -86,7 +86,7 @@ export class GraphService {
     if (cached) return cached;
 
     const results = await this.neo4j.read(
-      `MATCH (f:FILE {file_path: $filePath})
+      `MATCH (f:FILE:ENTITY {file_path: $filePath})
        OPTIONAL MATCH (f)-[:HAS_BUG]->(b)
        RETURN f.file_path AS file_path,
               count(b) AS bug_count,
@@ -109,7 +109,7 @@ export class GraphService {
     if (cached) return cached;
 
     const results = await this.neo4j.read(
-      `MATCH (f:FILE {repo_id: $repoId})
+      `MATCH (f:FILE:ENTITY {repo_id: $repoId})
        WHERE f.last_modified IS NOT NULL
        RETURN f.id AS id, f.name AS name, f.file_path AS file_path,
               f.last_modified AS last_modified
@@ -136,7 +136,7 @@ export class GraphService {
     if (patch.deleted_node_ids.length > 0) {
       await this.neo4j.write(
         `UNWIND $ids AS nodeId
-         MATCH (n {id: nodeId, repo_id: $repoId})
+         MATCH (n:ENTITY {id: nodeId, repo_id: $repoId})
          DETACH DELETE n`,
         { ids: patch.deleted_node_ids, repoId: patch.repo_id },
       );
@@ -146,41 +146,84 @@ export class GraphService {
     if (patch.deleted_file_paths && patch.deleted_file_paths.length > 0) {
       await this.neo4j.write(
         `UNWIND $filePaths AS filePath
-         MATCH (n {file_path: filePath, repo_id: $repoId})
+         MATCH (n:ENTITY {file_path: filePath, repo_id: $repoId})
          DETACH DELETE n`,
         { filePaths: patch.deleted_file_paths, repoId: patch.repo_id },
       );
     }
 
-    // 2. Upsert nodes (MERGE to avoid duplicates)
+    // 2. Upsert nodes (MERGE to avoid duplicates, grouped by label type)
     if (patch.nodes.length > 0) {
-      await this.neo4j.write(
-        `UNWIND $nodes AS node
-         MERGE (n {id: node.id, repo_id: node.repo_id})
-         SET n.name = node.name,
-             n.type = node.type,
-             n.file_path = node.file_path,
-             n.last_modified = timestamp()
-         SET n += node.properties`,
-        { nodes: patch.nodes.map((n) => ({ ...n, properties: n.properties || {} })) },
-      );
-    }
+      const nodesByType = new Map<string, any[]>();
+      for (const node of patch.nodes) {
+        const type = node.type;
+        if (!nodesByType.has(type)) {
+          nodesByType.set(type, []);
+        }
+        nodesByType.get(type)!.push({
+          id: node.id,
+          repo_id: node.repo_id,
+          name: node.name,
+          file_path: node.file_path,
+          properties: node.properties || {},
+        });
+      }
 
-    // 3. Upsert edges
-    if (patch.edges.length > 0) {
-      for (const edge of patch.edges) {
+      for (const [type, nodes] of nodesByType.entries()) {
         await this.neo4j.write(
-          `MATCH (source {id: $source}), (target {id: $target})
-           MERGE (source)-[r:${edge.relationship}]->(target)
-           SET r += $properties`,
-          {
-            source: edge.source,
-            target: edge.target,
-            properties: edge.properties || {},
-          },
+          `UNWIND $nodes AS node
+           MERGE (n:ENTITY:${type} {id: node.id, repo_id: node.repo_id})
+           SET n.name = node.name,
+               n.type = $type,
+               n.file_path = node.file_path,
+               n.last_modified = timestamp()
+           SET n += node.properties`,
+          { nodes, type },
         );
       }
     }
+
+    // 3. Upsert edges (grouped by relationship type and batched using UNWIND)
+    if (patch.edges.length > 0) {
+      const edgesByRel = new Map<string, any[]>();
+      for (const edge of patch.edges) {
+        const rel = edge.relationship;
+        if (!edgesByRel.has(rel)) {
+          edgesByRel.set(rel, []);
+        }
+        edgesByRel.get(rel)!.push({
+          source: edge.source,
+          target: edge.target,
+          properties: edge.properties || {},
+        });
+      }
+
+      for (const [rel, edges] of edgesByRel.entries()) {
+        await this.neo4j.write(
+          `UNWIND $edges AS edge
+           MATCH (source:ENTITY {id: edge.source})
+           MATCH (target:ENTITY {id: edge.target})
+           MERGE (source)-[r:${rel}]->(target)
+           SET r += edge.properties`,
+          { edges },
+        );
+      }
+    }
+
+    // Invalidate stale cache entries affected by this patch
+    const keysToDelete: string[] = [`recent:${patch.repo_id}`];
+
+    for (const node of patch.nodes) {
+      keysToDelete.push(`callers:${node.id}`, `deps:${node.id}`, `impact:${node.id}`);
+    }
+    for (const id of patch.deleted_node_ids) {
+      keysToDelete.push(`callers:${id}`, `deps:${id}`, `impact:${id}`);
+    }
+    for (const filePath of patch.deleted_file_paths ?? []) {
+      keysToDelete.push(`risk:${filePath}`);
+    }
+
+    await Promise.all(keysToDelete.map((k) => this.cache.del(k)));
 
     this.logger.log(`Patch applied successfully for repo ${patch.repo_id}`);
     return { status: 'applied', repo_id: patch.repo_id };
