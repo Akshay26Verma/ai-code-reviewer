@@ -36,9 +36,9 @@ This service is built using:
 
 When a PR is merged, the indexing pipeline executes:
 1. **Validation**: Validates the payload structure.
-2. **Segregation**: Splits files into `changedFiles` and `removedFiles`.
+2. **Segregation**: Splits files into `changedFiles` and `removedFiles`. Files matching excluded path patterns (`node_modules/`, `vendor/`, `bower_components/`, `dist/`, `build/`, `.git/`) are silently skipped in both passes.
 3. **Deduplication Check**: Queries Redis to skip unchanged files.
-4. **AST Parse & Embed**: Loads the language-specific WASM grammar, parses the source into an AST, and walks the tree with a DFS scope-stack walker to extract `ParsedNode[]` (FILE, CLASS, FUNCTION — with full source content, line ranges, and hierarchical IDs like `file.ts#ClassName.methodName`) and `ParsedEdge[]` (CALLS, IMPORTS, EXTENDS). Then requests embeddings from the Bifrost LLM Gateway.
+4. **AST Parse & Embed**: Loads the language-specific WASM grammar, parses the source into an AST, and walks the tree with a DFS scope-stack walker to extract `ParsedNode[]` (FILE, CLASS, FUNCTION — with full source content, line ranges, and hierarchical IDs like `file.ts#ClassName.methodName`) and `ParsedEdge[]` (CALLS, IMPORTS, EXTENDS, IMPLEMENTS). Then requests embeddings from the Bifrost LLM Gateway.
 5. **Archive**: Compresses and uploads snapshots to S3 (LocalStack in dev).
 6. **Batched Deletion**:
    - Deletes Pinecone vectors for removed files using `{ file_path: { $in: paths } }`.
@@ -111,8 +111,7 @@ Each node has a deterministic, scope-nested ID: `filePath#ClassName.methodName`.
 ### Smoke Test
 
 ```bash
-npx ts-node --project apps/intelligence/code-indexer/tsconfig.app.json \
-  apps/intelligence/code-indexer/src/app/parser/parser.smoke-test.ts
+npx nx run code-indexer:smoke-test
 ```
 
 ---
@@ -120,3 +119,5 @@ npx ts-node --project apps/intelligence/code-indexer/tsconfig.app.json \
 ## ⚠️ Known Limitations
 
 - **Dangling CALLS Edges**: Since `web-tree-sitter` performs syntactic (not semantic) parsing, calls to built-in/stdlib methods (e.g., `Array.push`, `Map.get`) are emitted as `CALLS` edges whose targets have no corresponding node in the knowledge graph. These create harmless dangling edges but add noise. Accurate resolution requires language-specific compiler/type-checker APIs (planned for TypeScript via the TS Compiler API).
+
+- **Typed Call Resolution is TS/JS Only**: Receiver-type inference — resolving `this.service.method()` to `ServiceClass.method` — relies on a scope tracker that captures TypeScript and JavaScript class fields (`property_definition`, `public_field_definition`, `field_definition`) and typed constructor parameters. For all other languages (Python, Java, Go, Rust, C#), `CALLS` edges always point to the raw callee name without receiver-type resolution. Full cross-language resolution requires compiler/type-checker API integration and is accepted as out of scope for this phase.

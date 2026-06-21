@@ -13,6 +13,8 @@ The package organizes and exports schemas across several logical domains:
 
 ### 1. Events (`/src/events.ts`)
 * `PREventSchema`: Validates pull request status and lifecycle events (`opened`, `updated`, `closed`, `merged`).
+* `PRFileChangeSchema`: Validates a single changed file entry (filename, content, status).
+* `MergedPREventSchema`: Validates the full merged PR Kafka payload including the `files` array.
 
 ### 2. Analysis (`/src/analysis.ts`)
 * `FindingSchema`: Validates static analysis linter/rule issues (e.g. Semgrep, CodeQL).

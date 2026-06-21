@@ -17,6 +17,8 @@ A shared library providing static TypeScript interfaces and types for the AI Cod
 
 ### 2. Events (`/src/events.ts`)
 * `PREvent`: Structure for PR webhooks containing commits, actions, and repo context.
+* `PRFileChange`: Represents a single changed file in a merged PR (filename, content, status).
+* `MergedPREvent`: Extends `PREvent` with `action: 'merged'` and a `files: PRFileChange[]` array.
 
 ### 3. Analysis (`/src/analysis.ts`)
 * `Finding`: Issue reported by static lint rules.

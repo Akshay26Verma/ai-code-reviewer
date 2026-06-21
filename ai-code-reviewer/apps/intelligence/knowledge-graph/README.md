@@ -14,7 +14,7 @@ By centralizing all Neo4j writes into this single service, we eliminate distribu
 - **O(1) File Deletion Support**: Supports batched node deletions by file path during graph patching, running highly optimized Neo4j Cypher unwinding queries under the hood:
   ```cypher
   UNWIND $filePaths AS filePath
-  MATCH (n {file_path: filePath, repo_id: $repoId})
+  MATCH (n:ENTITY {file_path: filePath, repo_id: $repoId})
   DETACH DELETE n
   ```
 
@@ -48,9 +48,21 @@ This service is built using:
 
 The service connects to infrastructure using environment variables:
 
-- `NEO4J_URI` / `NEO4J_USER` / `NEO4J_PASSWORD`
+- `NEO4J_URI` / `NEO4J_USERNAME` / `NEO4J_PASSWORD`
 - `REDIS_URL` (default: `redis://localhost:6379/0`)
 - `KG_CACHE_TTL` (default: 60 seconds)
+
+---
+
+## 🧪 Smoke Test
+
+Validates the full Neo4j round-trip against a real instance (AuraDB or local). Requires credentials in `.env` — see `.env.example`.
+
+```bash
+npx nx run knowledge-graph:smoke-test
+```
+
+Covers: Zod schema validation, node upsert with label grouping, EXTENDS/IMPLEMENTS/CALLS edge creation, delete by node ID, and delete by file path.
 
 ---
 

@@ -16,10 +16,12 @@ apps/intelligence/knowledge-graph/
 │   │   │   └── neo4j.service.ts
 │   │   ├── utils/
 │   │   │   └── zod-validation.pipe.ts
-│   │   └── app.module.ts
+│   │   ├── app.module.ts
+│   │   └── smoke-test.ts
 │   ├── assets/
 │   │   └── .gitkeep
 │   └── main.ts
+├── .env.example
 ├── project.json
 ├── README.md
 ├── tsconfig.app.json
