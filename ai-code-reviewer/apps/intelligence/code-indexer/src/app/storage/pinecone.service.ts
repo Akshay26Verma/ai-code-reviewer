@@ -21,7 +21,7 @@ export class PineconeService implements OnModuleInit {
         this.logger.log(`Creating Pinecone index: ${indexName}...`);
         await this.client.createIndex({
           name: indexName,
-          dimension: 1536,
+          dimension: 1024,
           metric: 'cosine',
           spec: { serverless: { cloud: 'aws', region: 'us-east-1' } },
         });

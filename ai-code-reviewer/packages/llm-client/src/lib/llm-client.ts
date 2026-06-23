@@ -63,16 +63,20 @@ export class LLMClient {
   }
 
   /**
-   * Generates embeddings via Bifrost.
+   * Generates embeddings via Voyage AI (voyage-code-2, 1024 dims).
    */
-  async embed(texts: string[], repoId: string): Promise<number[][]> {
+  async embed(texts: string[]): Promise<number[][]> {
     try {
-      const response = await axios.post(`${this.baseUrl}/v1/embeddings`, {
-        model: 'text-embedding-3-small',
-        input: texts,
-        user: repoId
-      });
-
+      const response = await axios.post(
+        'https://api.voyageai.com/v1/embeddings',
+        { model: 'voyage-code-2', input: texts },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
       return response.data.data.map((item: any) => item.embedding);
     } catch (error: any) {
       console.error('LLMClient Embedding Error:', error.response?.data || error.message);
