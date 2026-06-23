@@ -2,6 +2,7 @@ node_modules/
 dist/
 .nx/
 .env
+tmp/
 
 ai-code-reviewer/.vscode/
 ai-code-reviewer/.prettierrc
