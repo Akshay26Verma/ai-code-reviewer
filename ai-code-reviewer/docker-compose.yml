@@ -34,7 +34,7 @@ services:
       - SERVICES=s3
       - AWS_DEFAULT_REGION=us-east-1
     volumes:
-      - ../tmp/localstack-data:/var/lib/localstack
+      - ./tmp/localstack-data:/var/lib/localstack
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.5.0
@@ -83,6 +83,8 @@ services:
       - "3001:3001"
     env_file:
       - apps/intelligence/knowledge-graph/.env
+    environment:
+      PORT: "3001"
     depends_on:
       neo4j:
         condition: service_healthy
@@ -105,6 +107,69 @@ services:
       knowledge-graph:
         condition: service_started
 
+  webhook-service:
+    build:
+      context: .
+      dockerfile: apps/ingestion/webhook-service/Dockerfile
+    ports:
+      - "3002:3002"
+    env_file:
+      - apps/ingestion/webhook-service/.env
+    environment:
+      PORT: "3002"
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_code_reviewer
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: apps/ingestion/api-gateway/Dockerfile
+    ports:
+      - "3003:3003"
+    env_file:
+      - apps/ingestion/api-gateway/.env
+    environment:
+      PORT: "3003"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/ingestion/dashboard/Dockerfile
+    ports:
+      - "3004:3004"
+    env_file:
+      - apps/ingestion/dashboard/.env
+    environment:
+      PORT: "3004"
+    depends_on:
+      api-gateway:
+        condition: service_started
+
 volumes:
   redis-data:
   neo4j-data:
+  postgres-data:
