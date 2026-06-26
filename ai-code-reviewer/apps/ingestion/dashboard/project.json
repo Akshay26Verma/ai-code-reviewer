@@ -1,0 +1,23 @@
+{
+  "name": "dashboard",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "next build",
+        "cwd": "apps/ingestion/dashboard"
+      }
+    },
+    "serve": {
+      "continuous": true,
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "next dev -p 3004",
+        "cwd": "apps/ingestion/dashboard"
+      }
+    }
+  },
+  "tags": []
+}
