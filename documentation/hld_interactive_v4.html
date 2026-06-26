@@ -212,12 +212,12 @@ dashboard: {
   domain: 'Ingestion',
   lang: 'ts',
   dc: 'c',
-  desc: 'Next.js 14 App Router frontend. Server Components fetch data from the API Gateway. Displays PR review results, inline comments, and developer insights.',
-  tech: [['Next.js 14', 'ts'], ['Tailwind CSS', 'ts'], ['NextAuth.js', 'ts']],
+  desc: 'Full-stack Next.js 14 App Router service (no separate NestJS backend). GitHub OAuth via NextAuth v5 — on sign-in, mints an HS256 JWT compatible with the api-gateway JwtGuard and stores it inside the encrypted session cookie. Server Components and Route Handlers forward the token as Authorization: Bearer to the api-gateway. Displays PR reviews with inline diff comments, developer insights, and manual analysis triggers.',
+  tech: [['Next.js 14 App Router', 'ts'], ['NextAuth v5 (Auth.js)', 'ts'], ['Tailwind CSS', 'ts'], ['GitHub OAuth', 'ts']],
   prod: [],
   cons: [],
-  apis: ['Served at /', 'Server Actions for Apply Fix'],
-  mig: 'Responsive design. Shared API contract with VS Code extension.',
+  apis: ['GET /prs', 'GET /prs/:prId', 'GET /insights/:type/:id', 'POST /api/analyze', 'POST /api/index/:repoId', 'GET|POST /api/auth/[...nextauth]'],
+  mig: 'HS256 JWT_SECRET must match api-gateway exactly. Token is never sent to the browser — all api-gateway calls are server-to-server.',
 },
 
 temporal: {

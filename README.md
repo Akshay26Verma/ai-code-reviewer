@@ -29,10 +29,10 @@ We have moved away from isolated service-specific LLM logic to a **Unified LLM S
 
 The platform is divided into five functional domains communicating asynchronously via **Kafka**.
 
-### Ingestion Domain
-- **Webhook Service**: Validates and normalizes events from SCM providers.
-- **API Gateway**: Secure REST API serving the dashboard and CI integrations.
-- **Developer Dashboard**: A Next.js 14 interface for visualizing reviews, insights, and interactive "Apply Fix" flows.
+### Ingestion Domain ✅ Complete
+- **Webhook Service**: Validates HMAC-SHA256 signatures and normalizes GitHub/GitLab events; emits to `pr.events.raw` and `pr.events.merged`.
+- **API Gateway**: Secure REST API (NestJS, HS256 JWT, Redis rate limiting, Prisma/PostgreSQL) serving the dashboard and CI integrations.
+- **Developer Dashboard**: Full-stack Next.js 14 App Router service. GitHub OAuth via NextAuth v5 mints HS256 JWTs stored in the session cookie and forwarded server-to-server to the api-gateway. Pages: PR review list, inline diff comments, developer/team insights, manual analysis trigger.
 
 ### Orchestration Domain
 - **Temporal Worker**: Executes durable workflows for PR reviews, managing task fan-out and result aggregation.
@@ -80,23 +80,30 @@ The platform is divided into five functional domains communicating asynchronousl
 ### Quick Start
 1. **Clone the repository** and install dependencies:
    ```bash
+   cd ai-code-reviewer
    npm install
    ```
-2. **Environment**: Copy `.env.example` to `.env` and configure your keys.
-3. **Infrastructure**: Spin up the required databases and messaging bus:
+2. **Environment**: Copy each service's `.env.example` to `.env` and fill in the secrets (GitHub OAuth, JWT_SECRET, Kafka brokers, etc.).
+3. **Infrastructure**: Spin up all backing services:
    ```bash
-   docker-compose up -d
+   docker compose up kafka redis postgres neo4j -d
    ```
-4. **Run a Service**:
+4. **Run a service** (from the `ai-code-reviewer/` directory):
    ```bash
-   nx serve code-indexer
+   npx nx run dashboard:serve          # → http://localhost:3004
+   npx nx run api-gateway:serve        # → http://localhost:3003
+   npx nx run webhook-service:serve    # → http://localhost:3002
+   npx nx run knowledge-graph:serve    # → http://localhost:3001
+   npx nx run code-indexer:serve       # → http://localhost:3000
    ```
 
 ## 📚 Documentation
 
 For deeper technical dives, refer to the [`documentation/`](./documentation/) folder:
-- **[Interactive HLD](./documentation/hld_interactive_v4.html)**: Visual guide to the architecture and data flows.
-- **Service Structures**: Detailed markdown files for each domain and package.
+- **[Interactive HLD](./documentation/hld_interactive_v4.html)**: Clickable visual guide — select any service to see its responsibilities, tech stack, and Kafka topics.
+- **Ingestion domain structures**: [dashboard](./documentation/dashboard-structure.md) · [api-gateway](./documentation/api-gateway-structure.md) · [webhook-service](./documentation/webhook-service-structure.md)
+- **Intelligence domain structures**: [code-indexer](./documentation/code-indexer-structure.md) · [knowledge-graph](./documentation/knowledge-graph-structure.md)
+- **Shared package structures**: [kafka](./documentation/kafka-structure.md) · [llm-client](./documentation/llm-client-structure.md) · [schemas](./documentation/schemas-structure.md) · [types](./documentation/types-structure.md)
 
 ---
 *Built for the next generation of code quality.*
