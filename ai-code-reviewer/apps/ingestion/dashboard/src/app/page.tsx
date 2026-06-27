@@ -3,5 +3,5 @@ import { auth } from '@/lib/auth';
 
 export default async function HomePage() {
   const session = await auth();
-  redirect(session ? '/prs' : '/login');
+  redirect(session ? '/home' : '/login');
 }

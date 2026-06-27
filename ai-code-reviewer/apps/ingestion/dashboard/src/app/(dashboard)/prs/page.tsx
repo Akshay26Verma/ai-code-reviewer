@@ -1,13 +1,20 @@
-import { PrList } from '@/components/pr-list';
+import { apiClient } from '@/lib/api';
+import type { UserRepo } from '@/types';
+import { RepoSearchTable } from '@/components/repo-search-table';
 
-export default function PrsPage() {
+export default async function PrsPage() {
+  const res = await apiClient.getUserRepos();
+  const repos: UserRepo[] = res.ok ? await res.json() : [];
+
   return (
     <div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Pull Requests</h1>
-        <p className="mt-1 text-sm text-gray-500">Look up a PR to view its automated review.</p>
+        <p className="mt-1 text-sm text-gray-500">
+          Select a repository to browse its open pull requests.
+        </p>
       </div>
-      <PrList />
+      <RepoSearchTable repos={repos} />
     </div>
   );
 }

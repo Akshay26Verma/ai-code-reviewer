@@ -9,6 +9,7 @@ interface NavSidebarProps {
 }
 
 const navLinks = [
+  { href: '/home', label: 'Home' },
   { href: '/prs', label: 'Pull Requests' },
   { href: '/insights/developer', label: 'Dev Insights' },
   { href: '/insights/team', label: 'Team Insights' },

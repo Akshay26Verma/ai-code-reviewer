@@ -1,6 +1,25 @@
+import { cookies } from 'next/headers';
 import { signIn } from '@/lib/auth';
 
+interface KnownAccount {
+  login: string;
+  name: string | null;
+  image: string | null;
+}
+
+function readKnownAccounts(): KnownAccount[] {
+  const raw = cookies().get('known_gh_accounts')?.value;
+  if (!raw) return [];
+  try {
+    return JSON.parse(decodeURIComponent(raw));
+  } catch {
+    return [];
+  }
+}
+
 export default function LoginPage() {
+  const accounts = readKnownAccounts();
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-gray-200">
@@ -11,20 +30,65 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form
-          action={async () => {
-            'use server';
-            await signIn('github', { redirectTo: '/prs' });
-          }}
-        >
-          <button
-            type="submit"
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+        <div className="space-y-2">
+          {accounts.map((account) => (
+            <form
+              key={account.login}
+              action={async () => {
+                'use server';
+                await signIn('github', { redirectTo: '/home' }, { login: account.login });
+              }}
+            >
+              <button
+                type="submit"
+                className="flex w-full items-center gap-3 rounded-lg border border-gray-200 px-4 py-3 text-left transition-colors hover:bg-gray-50"
+              >
+                {account.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={account.image} alt="" className="h-8 w-8 shrink-0 rounded-full" />
+                ) : (
+                  <div className="h-8 w-8 shrink-0 rounded-full bg-gray-200" />
+                )}
+                <div className="min-w-0">
+                  {account.name && (
+                    <p className="truncate text-sm font-medium text-gray-900">{account.name}</p>
+                  )}
+                  <p className="truncate text-xs text-gray-500">@{account.login}</p>
+                </div>
+              </button>
+            </form>
+          ))}
+
+          {accounts.length > 0 && (
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-200" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-white px-2 text-gray-400">or</span>
+              </div>
+            </div>
+          )}
+
+          <form
+            action={async () => {
+              'use server';
+              await signIn('github', { redirectTo: '/home' });
+            }}
           >
-            <GitHubIcon />
-            Sign in with GitHub
-          </button>
-        </form>
+            <button
+              type="submit"
+              className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                accounts.length > 0
+                  ? 'border border-gray-300 text-gray-700 hover:bg-gray-50 focus:ring-gray-300'
+                  : 'bg-gray-900 text-white hover:bg-gray-700 focus:ring-gray-900'
+              }`}
+            >
+              <GitHubIcon />
+              {accounts.length > 0 ? 'Use a different account' : 'Sign in with GitHub'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );
