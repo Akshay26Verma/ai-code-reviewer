@@ -1,8 +1,9 @@
 apps/ingestion/api-gateway/
 ├── prisma/
 │   ├── migrations/
-│   │   └── ...                           # Prisma migration history
-│   └── schema.prisma                     # Review + Comment models
+│   │   ├── 20260626113750_init/
+│   │   └── 20260627153859_add_user_repo_pull_request/   # UserRepo + PullRequest tables; commitSha on Review
+│   └── schema.prisma                     # Review (+ commitSha), Comment, UserRepo, PullRequest models; binaryTargets for linux-musl Docker
 ├── src/
 │   ├── app/
 │   │   ├── analyze/
@@ -15,10 +16,14 @@ apps/ingestion/api-gateway/
 │   │   │   └── rate-limit.guard.ts       # Redis sliding-window rate limiter
 │   │   ├── health/
 │   │   │   └── health.controller.ts      # GET /health
-│   │   ├── index/
-│   │   │   ├── index.controller.ts       # POST /index/:repoId/reindex (JWT)
-│   │   │   ├── index.module.ts
-│   │   │   └── index.service.ts          # Proxies to code-indexer via HTTP
+│   │   ├── user-repos/
+│   │   │   ├── user-repos.controller.ts  # GET /user-repos, PUT /user-repos/bulk, POST /user-repos, DELETE /user-repos/:owner/:name (JWT)
+│   │   │   ├── user-repos.module.ts
+│   │   │   └── user-repos.service.ts     # Lists repos with openPrCount; bulk upsert/add/delete via Prisma
+│   │   ├── repos/
+│   │   │   ├── repos.controller.ts       # GET /repos/:owner/:repo/prs, PUT …/prs/bulk, GET …/prs/:prNumber/reviews (JWT)
+│   │   │   ├── repos.module.ts
+│   │   │   └── repos.service.ts          # Upserts PullRequest rows; updates lastPrPollAt on bulk sync
 │   │   ├── insights/
 │   │   │   ├── insights.controller.ts    # GET /insights/developer/:id, GET /insights/team/:id
 │   │   │   ├── insights.module.ts
@@ -35,10 +40,10 @@ apps/ingestion/api-gateway/
 │   │   │   └── reviews.service.ts        # Reads from PostgreSQL via Prisma
 │   │   ├── shared/
 │   │   │   └── zod-validation.pipe.ts    # Global request body validation pipe
-│   │   └── app.module.ts
+│   │   └── app.module.ts                 # Registers KafkaModule, AuthModule, PrismaModule, AnalyzeModule, ReviewsModule, InsightsModule, UserReposModule, ReposModule
 │   └── main.ts
 ├── .env.example
-├── Dockerfile
+├── Dockerfile                            # builder runs npx prisma generate; runner installs openssl, runs npx prisma migrate deploy before start
 ├── project.json
 ├── README.md
 ├── tsconfig.app.json

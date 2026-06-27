@@ -6,7 +6,7 @@ apps/intelligence/code-indexer/
 │   │   │   ├── knowledge-graph.client.ts
 │   │   │   └── llm-gateway.client.ts
 │   │   ├── indexer/
-│   │   │   ├── indexer.controller.ts
+│   │   │   ├── indexer.controller.ts     # POST /index/:owner/:repo/reindex — triggers full repository indexing
 │   │   │   ├── indexer.module.ts
 │   │   │   └── indexer.service.ts
 │   │   ├── kafka/
@@ -20,7 +20,7 @@ apps/intelligence/code-indexer/
 │   │   ├── storage/
 │   │   │   ├── hash-cache.service.ts
 │   │   │   ├── pinecone.service.ts
-│   │   │   ├── s3.service.ts
+│   │   │   ├── s3.service.ts             # Uploads gzip+AES256 snapshots; logs warning (not throw) if S3 bucket missing at startup
 │   │   │   └── storage.module.ts
 │   │   └── app.module.ts
 │   └── main.ts

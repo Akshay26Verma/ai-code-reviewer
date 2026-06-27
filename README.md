@@ -18,10 +18,10 @@ We have moved away from isolated service-specific LLM logic to a **Unified LLM S
 ## 🚀 Key Capabilities
 
 - **Semantic Intelligence**: Deep LLM-powered reasoning using RAG (Retrieval-Augmented Generation) to understand code context and intent.
-- **Structural Awareness**: Mapping relationships between code entities (classes, functions, modules) using **Neo4j** to perform impact and "blast-radius" analysis.
+- **Structural Awareness**: Mapping relationships between code entities (classes, functions, modules) using a knowledge graph to perform impact and "blast-radius" analysis.
 - **Durable Orchestration**: Reliable PR review lifecycles managed by **Temporal**, ensuring no review task is ever lost even during service failures.
 - **Multi-SCM Integration**: Unified ingestion for GitHub, GitLab, and Bitbucket events.
-- **O(1) Batched Deletions**: File removals are handled with single-query batched operations in both Pinecone (via `$in` filter) and Neo4j (via `UNWIND` Cypher), eliminating sequential network overhead.
+- **O(1) Batched Deletions**: File removals are handled with single-query batched operations in both Pinecone (via `$in` filter) and the knowledge graph (via `UNWIND` Cypher), eliminating sequential network overhead.
 
 ---
 
@@ -32,7 +32,7 @@ The platform is divided into five functional domains communicating asynchronousl
 ### Ingestion Domain ✅ Complete
 - **Webhook Service**: Validates HMAC-SHA256 signatures and normalizes GitHub/GitLab events; emits to `pr.events.raw` and `pr.events.merged`.
 - **API Gateway**: Secure REST API (NestJS, HS256 JWT, Redis rate limiting, Prisma/PostgreSQL) serving the dashboard and CI integrations.
-- **Developer Dashboard**: Full-stack Next.js 14 App Router service. GitHub OAuth via NextAuth v5 mints HS256 JWTs stored in the session cookie and forwarded server-to-server to the api-gateway. Pages: PR review list, inline diff comments, developer/team insights, manual analysis trigger.
+- **Developer Dashboard**: Full-stack Next.js 14 App Router service. GitHub OAuth via NextAuth v5 mints HS256 JWTs stored in the session cookie and forwarded server-to-server to the api-gateway. Pages: home (repo grid), PRs per repo, PR review detail, developer/team insights.
 
 ### Orchestration Domain
 - **Temporal Worker**: Executes durable workflows for PR reviews, managing task fan-out and result aggregation.
@@ -44,7 +44,7 @@ The platform is divided into five functional domains communicating asynchronousl
 
 ### Intelligence Domain
 - **Code Indexer**: Background worker that parses ASTs across 9 languages (TypeScript/TSX, JavaScript/JSX, Python, Java, Go, Rust, C#) using `web-tree-sitter` and precompiled WASM grammars, generates embeddings, deduplicates via Redis hash cache, and synchronizes the Vector DB and Knowledge Graph.
-- **Knowledge Graph Service**: Manages the structural integrity and structural queries for the codebase in Neo4j. Supports batched file-path based deletion.
+- **Knowledge Graph Service**: Manages the structural integrity and structural queries for the codebase. Supports batched file-path based deletion.
 - **LLM Client (Shared)**: Standardized package for all model interactions via Bifrost.
 
 ### Output Domain
@@ -58,7 +58,6 @@ The platform is divided into five functional domains communicating asynchronousl
 
 - **Frameworks**: [Nx](https://nx.dev/), [NestJS](https://nestjs.com/), [Next.js 14](https://nextjs.org/)
 - **Databases**:
-  - **Neo4j** (Graph Representation)
   - **Pinecone** (Vector Search / Embeddings)
   - **PostgreSQL** (Relational Data via Prisma)
   - **Redis** (Hash Cache Deduplication & Query Caching)
@@ -86,7 +85,7 @@ The platform is divided into five functional domains communicating asynchronousl
 2. **Environment**: Copy each service's `.env.example` to `.env` and fill in the secrets (GitHub OAuth, JWT_SECRET, Kafka brokers, etc.).
 3. **Infrastructure**: Spin up all backing services:
    ```bash
-   docker compose up kafka redis postgres neo4j -d
+   docker compose up kafka redis postgres localstack -d
    ```
 4. **Run a service** (from the `ai-code-reviewer/` directory):
    ```bash
