@@ -37,11 +37,11 @@ export class S3Service implements OnModuleInit {
           this.logger.log(`Successfully created S3 bucket: ${this.bucketName}`);
         } catch (createError) {
           this.logger.error(`Failed to auto-create S3 bucket in development: ${(createError as Error).message}`);
-          throw createError;
+          this.logger.warn('S3 unavailable at startup — upload operations will fail until S3 is reachable.');
         }
       } else {
         this.logger.error(`S3 bucket "${this.bucketName}" does not exist or is inaccessible: ${(error as Error).message}`);
-        throw error;
+        this.logger.warn('S3 unavailable at startup — upload operations will fail until S3 is reachable.');
       }
     }
   }

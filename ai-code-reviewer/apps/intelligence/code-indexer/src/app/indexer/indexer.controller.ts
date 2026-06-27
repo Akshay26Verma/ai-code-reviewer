@@ -5,8 +5,9 @@ import { IndexerService } from './indexer.service';
 export class IndexerController {
   constructor(private readonly indexerService: IndexerService) {}
 
-  @Post(':repoId/reindex')
-  async reindexRepo(@Param('repoId') repoId: string, @Body() body: { files: any[] }) {
+  @Post(':owner/:repo/reindex')
+  async reindexRepo(@Param('owner') owner: string, @Param('repo') repo: string, @Body() body: { files: any[] }) {
+    const repoId = `${owner}/${repo}`;
     await this.indexerService.indexRepository(repoId, body.files || []);
     return { status: 'indexing_started', repo_id: repoId };
   }
