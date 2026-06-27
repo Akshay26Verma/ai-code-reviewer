@@ -4,7 +4,8 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 model Review {
@@ -12,10 +13,40 @@ model Review {
   prId      Int
   repoId    String
   orgId     String
+  commitSha String?
   status    String    @default("pending")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   comments  Comment[]
+}
+
+model UserRepo {
+  id           String    @id @default(cuid())
+  userLogin    String
+  owner        String
+  name         String
+  fullName     String
+  isOwned      Boolean   @default(true)
+  addedAt      DateTime  @default(now())
+  lastPrPollAt DateTime?
+
+  @@unique([userLogin, fullName])
+}
+
+model PullRequest {
+  id        String   @id @default(cuid())
+  owner     String
+  repo      String
+  prNumber  Int
+  title     String
+  author    String
+  state     String   @default("open")
+  commitSha String
+  createdAt DateTime
+  updatedAt DateTime
+  cachedAt  DateTime @default(now())
+
+  @@unique([owner, repo, prNumber])
 }
 
 model Comment {

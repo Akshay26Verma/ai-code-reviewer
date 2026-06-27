@@ -6,7 +6,8 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AnalyzeModule } from './analyze/analyze.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { InsightsModule } from './insights/insights.module';
-import { IndexModule } from './index/index.module';
+import { UserReposModule } from './user-repos/user-repos.module';
+import { ReposModule } from './repos/repos.module';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { IndexModule } from './index/index.module';
     AnalyzeModule,
     ReviewsModule,
     InsightsModule,
-    IndexModule,
+    UserReposModule,
+    ReposModule,
   ],
   controllers: [HealthController],
 })
